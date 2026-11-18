@@ -144,6 +144,12 @@ How it behaves:
   **Execute Exit Actions**, the Exit Actions run once at that point - e.g. to remove a "burning" effect.
 - Once **Max Repeats** is reached, it behaves like a normal Collider Event: the object has to leave and
   re-enter before it fires again.
+- With **Execute Exit Actions** and a **Max Repeats** above 0, an extra option appears: **Exit Actions When
+  Repeats Finish**. Tick it to run the Exit Actions as soon as the last repeat is done (once its Actions
+  have finished), instead of waiting for the object to leave - e.g. the lava burns 5 times, then a "burning
+  ends" effect plays. The cycle then ends as if the object had left, so the Exit Actions don't run a second
+  time when it does. On a Condition Watcher, it then waits for the Conditions to go false before it can
+  start a new series.
 - On a **Condition Watcher** there is no zone, so it repeats for as long as the Conditions stay true. When
   they go false the cycle ends, and when they're true again it starts over from a first run.
 - Repeat isn't offered with **Set Inactive**, **Destroy** or **Destroy Parent**, since those remove or

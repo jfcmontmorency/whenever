@@ -15,6 +15,11 @@ All notable changes to this package are documented here. Format follows
   run. It stops when the object leaves the zone, or is destroyed or deactivated while inside (with Execute
   Exit Actions, the Exit Actions then run once). On a Condition Watcher it repeats while the Conditions stay
   true. Works on `Collider Event`, `Collider Event 2D` and `Condition Watcher`.
+- **Exit Actions When Repeats Finish**: with After Trigger set to Execute Exit Actions and a Max Repeats
+  above 0, runs the Exit Actions as soon as the last repeat has finished (after its Actions are done),
+  instead of waiting for the object to leave. The cycle then ends as if it had left, so the Exit Actions
+  don't run a second time on leaving; a Condition Watcher waits for its Conditions to go false before it
+  can start a new series. Off by default.
 
 - **`Wait` Action**, to run Actions one after another instead of all at once. Everything above a Wait runs
   first, the list then pauses, and everything below it runs once the wait is over. Two modes: **Seconds**

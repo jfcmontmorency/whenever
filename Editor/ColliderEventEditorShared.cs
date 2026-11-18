@@ -15,7 +15,8 @@ namespace JFCartier.Whenever.Editor
             SerializedProperty afterTrigger,
             SerializedProperty repeat,
             SerializedProperty repeatInterval,
-            SerializedProperty maxRepeats)
+            SerializedProperty maxRepeats,
+            SerializedProperty exitActionsWhenRepeatsFinish)
         {
             EditorGUILayout.PropertyField(holdTime, new GUIContent("Hold Time", holdTime.tooltip));
             EditorGUILayout.PropertyField(afterTrigger);
@@ -31,6 +32,14 @@ namespace JFCartier.Whenever.Editor
             EditorGUI.indentLevel++;
             EditorGUILayout.PropertyField(repeatInterval);
             EditorGUILayout.PropertyField(maxRepeats);
+
+            // Only a limited series has a "last repeat" to react to, and only Execute Exit Actions has an
+            // Exit Actions list to run at that point.
+            if (mode == AfterTrigger.ExecuteExitActions && maxRepeats.intValue > 0)
+            {
+                EditorGUILayout.PropertyField(exitActionsWhenRepeatsFinish);
+            }
+
             EditorGUI.indentLevel--;
         }
 

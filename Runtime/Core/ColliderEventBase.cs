@@ -53,6 +53,9 @@ namespace JFCartier.Whenever
         [Min(0)]
         public int maxRepeats = 0;
 
+        [Tooltip("Only with After Trigger set to Execute Exit Actions and a Max Repeats above 0: runs the Exit Actions as soon as the last repeat has finished, instead of waiting for the object to leave. The cycle then ends as if it had left - the Exit Actions don't run a second time when it does.")]
+        public bool exitActionsWhenRepeatsFinish;
+
         private Renderer m_ActiveHintRenderer;
 
         /// <summary>
@@ -89,6 +92,14 @@ namespace JFCartier.Whenever
         private int m_RunCount;
 
         private const float MinRepeatInterval = 0.01f;
+
+        private bool m_FinishingRepeats;
+
+        /// <summary>
+        /// True only while the Exit Actions are being run because a limited series of repeats just ended
+        /// (as opposed to the object leaving). ConditionWatcher reads it from OnFiredAndReset().
+        /// </summary>
+        protected bool IsFinishingRepeats => m_FinishingRepeats;
 
         /// <summary>
         /// When true, Update() re-checks the condition fold while HasFired is true, and treats it flipping
@@ -378,7 +389,8 @@ namespace JFCartier.Whenever
 
             bool waitForAllToFinish = afterTrigger == AfterTrigger.SetInactive ||
                                       afterTrigger == AfterTrigger.Destroy ||
-                                      afterTrigger == AfterTrigger.DestroyParent;
+                                      afterTrigger == AfterTrigger.DestroyParent ||
+                                      IsFinalRunWithFinale;
 
             // Driven by hand rather than with "yield return RunActionList(...)": that way a list with no
             // Wait still completes inside the very call that started this coroutine, instead of taking a
@@ -462,12 +474,44 @@ namespace JFCartier.Whenever
             if (!RepeatApplies || !Checking) return false;
 
             // m_RunCount counts the first run too, so Max Repeats extra runs means m_RunCount up to Max + 1.
-            if (maxRepeats > 0 && m_RunCount > maxRepeats) return false;
+            if (maxRepeats > 0 && m_RunCount > maxRepeats)
+            {
+                // That was the last run of the series.
+                if (afterTrigger == AfterTrigger.ExecuteExitActions && exitActionsWhenRepeatsFinish)
+                {
+                    FinishRepeatsWithExitActions();
+                }
+
+                return false;
+            }
 
             ResetElements();
             m_RepeatAt = Time.time + Mathf.Max(repeatInterval, MinRepeatInterval);
             m_RepeatPending = true;
             return true;
+        }
+
+        /// <summary>
+        /// True for the last run of a limited series that ends with the Exit Actions. Its Actions are waited
+        /// on until they finish first - otherwise the Exit Actions would cut off whatever is still running,
+        /// since running them cancels the Actions.
+        /// </summary>
+        private bool IsFinalRunWithFinale =>
+            RepeatApplies
+            && exitActionsWhenRepeatsFinish
+            && afterTrigger == AfterTrigger.ExecuteExitActions
+            && maxRepeats > 0
+            && m_RunCount >= maxRepeats;
+
+        /// <summary>
+        /// Runs the Exit Actions and resets, as if the object had just left, because the series of repeats
+        /// is over. The flag lets ConditionWatcher tell this apart from a normal exit.
+        /// </summary>
+        private void FinishRepeatsWithExitActions()
+        {
+            m_FinishingRepeats = true;
+            RunExitActionsAndReset();
+            m_FinishingRepeats = false;
         }
 
         /// <summary>

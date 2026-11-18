@@ -20,6 +20,7 @@ namespace JFCartier.Whenever.Editor
         private SerializedProperty m_Repeat;
         private SerializedProperty m_RepeatInterval;
         private SerializedProperty m_MaxRepeats;
+        private SerializedProperty m_ExitActionsWhenRepeatsFinish;
         private SerializedProperty m_DebugLogging;
         private SerializedProperty m_DebugColor;
         private SerializedProperty m_RequiredTags;
@@ -42,6 +43,7 @@ namespace JFCartier.Whenever.Editor
             m_Repeat = serializedObject.FindProperty("repeat");
             m_RepeatInterval = serializedObject.FindProperty("repeatInterval");
             m_MaxRepeats = serializedObject.FindProperty("maxRepeats");
+            m_ExitActionsWhenRepeatsFinish = serializedObject.FindProperty("exitActionsWhenRepeatsFinish");
             m_DebugLogging = serializedObject.FindProperty("debugLogging");
             m_DebugColor = serializedObject.FindProperty("debugColor");
             m_RequiredTags = serializedObject.FindProperty("requiredTags");
@@ -72,7 +74,7 @@ namespace JFCartier.Whenever.Editor
             EditorGUILayout.PropertyField(m_DebugColor);
             ColliderEventEditorShared.DrawDebugLogging(m_DebugLogging);
 
-            ColliderEventEditorShared.DrawCommonFields(m_HoldTime, m_AfterTrigger, m_Repeat, m_RepeatInterval, m_MaxRepeats);
+            ColliderEventEditorShared.DrawCommonFields(m_HoldTime, m_AfterTrigger, m_Repeat, m_RepeatInterval, m_MaxRepeats, m_ExitActionsWhenRepeatsFinish);
             ColliderEventEditorShared.DrawHintMaterial(serializedObject, m_ShowHintMaterial, m_HintTargetMode, m_HintRenderer, m_HintMaterial);
             ColliderEventEditorShared.DrawLists(m_ConditionsList, m_ActionsList, m_ExitActionsList, m_AfterTrigger);
 

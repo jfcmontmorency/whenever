@@ -42,8 +42,10 @@ namespace JFCartier.Whenever
             // Execute Exit Actions already has its own false-triggered exit (UseConditionFalseAsExit,
             // handled by the base class) - by the time this runs for that mode, the Conditions have
             // already just gone false, so there's nothing extra to wait for. Every other After Trigger
-            // mode needs the gate above.
-            if (afterTrigger != AfterTrigger.ExecuteExitActions)
+            // mode needs the gate above - and so does the one case in Execute Exit Actions where the
+            // Conditions are still true: a limited series of repeats that just ended on its own (Exit
+            // Actions When Repeats Finish). Without the gate it would immediately start the series again.
+            if (afterTrigger != AfterTrigger.ExecuteExitActions || IsFinishingRepeats)
             {
                 m_WaitingForConditionsToClear = true;
             }
