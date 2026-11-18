@@ -103,6 +103,8 @@ namespace JFCartier.Whenever.Editor
         // doesn't sit underneath the handle.
         private const float LeftPadding = 14f;
 
+        private const float NotToggleWidth = 48f;
+
         private static void DrawElement(Rect rect, SerializedProperty listProperty, int index, bool isConditionList)
         {
             rect = new Rect(rect.x + LeftPadding, rect.y, rect.width - LeftPadding, rect.height);
@@ -135,7 +137,23 @@ namespace JFCartier.Whenever.Editor
 
             string label = ComponentTypeCache.DisplayName(element.GetType());
             bool expanded = IsExpanded(element);
-            Rect foldoutRect = new Rect(rect.x, y, rect.width - 24f, lineHeight);
+
+            // A Condition gets a "Not" toggle in its header, just left of the remove button, so it stays
+            // visible - and readable at a glance - even when the Condition is collapsed.
+            float notWidth = 0f;
+            if (isConditionList)
+            {
+                SerializedProperty invertProp = elementSo.FindProperty("Invert");
+                if (invertProp != null)
+                {
+                    notWidth = NotToggleWidth;
+                    Rect notRect = new Rect(rect.x + rect.width - 24f - NotToggleWidth, y, NotToggleWidth, lineHeight);
+                    bool invert = EditorGUI.ToggleLeft(notRect, new GUIContent("Not", invertProp.tooltip), invertProp.boolValue);
+                    if (invert != invertProp.boolValue) invertProp.boolValue = invert;
+                }
+            }
+
+            Rect foldoutRect = new Rect(rect.x, y, rect.width - 24f - notWidth, lineHeight);
             bool newExpanded = EditorGUI.Foldout(foldoutRect, expanded, label, true);
             SetExpanded(element, newExpanded);
 
@@ -175,7 +193,7 @@ namespace JFCartier.Whenever.Editor
 
         /// <summary>
         /// Draws every remaining serialized field on an element generically (skipping m_Script, Operator,
-        /// and anything listed in extraSkipNames). Custom drawers that only need to special-case a couple
+        /// Invert, and anything listed in extraSkipNames). Custom drawers that only need to special-case a couple
         /// of fields can draw those by hand, then call this for the rest instead of writing a full drawer.
         /// </summary>
         public static float DrawRemainingFields(Rect rect, SerializedObject elementSo, params string[] extraSkipNames)
@@ -216,7 +234,8 @@ namespace JFCartier.Whenever.Editor
 
         private static bool ShouldDrawGenericProperty(string propertyName, string[] extraSkipNames)
         {
-            if (propertyName == "m_Script" || propertyName == "Operator") return false;
+            // Operator (And/Or) and Invert (Not) are drawn in the element's header, never in its body.
+            if (propertyName == "m_Script" || propertyName == "Operator" || propertyName == "Invert") return false;
 
             if (extraSkipNames != null)
             {

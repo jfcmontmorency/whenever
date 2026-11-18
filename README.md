@@ -66,6 +66,14 @@ Looking At, Input, Variable, Distance, Rotation.
 Each condition after the first has an **And/Or** selector relating it to the one above it, read strictly
 top to bottom (e.g. "A Or B And C" reads as "(A Or B) And C").
 
+Every condition also has a **Not** checkbox in its header, next to the remove button. It flips that
+condition's own result - true becomes false and false becomes true - before it is combined with the others
+by And/Or. Use it for "the opposite of": *Variable "Has Key" is true* with **Not** ticked means "the player
+does **not** have the key"; *Distance less than 5* with **Not** ticked means "farther than 5".
+
+Not applies to the single condition it's on, not to the ones around it: with **A**, then **Or Not B**, then
+**And C**, the result reads strictly top to bottom as "(A Or (Not B)) And C".
+
 ## Actions
 
 Animation, Audio, Scene, GameObject, Material, Rigidbody, Rigidbody 2D, Transform, Variable, Invoke Events,

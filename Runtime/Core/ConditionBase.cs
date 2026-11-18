@@ -15,6 +15,14 @@ namespace JFCartier.Whenever
         public LogicOperator Operator;
 
         /// <summary>
+        /// NOT: flips this condition's own result - true becomes false and false becomes true - before it
+        /// is combined with the others by their And/Or Operators. Applied by the owning ColliderEvent/
+        /// ConditionWatcher, so Evaluate() itself always reports the plain, un-inverted answer.
+        /// </summary>
+        [Tooltip("NOT: flips this Condition's result - true becomes false and false becomes true - before it is combined with the other Conditions by And/Or.")]
+        public bool Invert;
+
+        /// <summary>
         /// If true, Evaluate(GameObject) is called instead of Evaluate() so this condition can use the
         /// GameObject that triggered the zone. Only meaningful under ColliderEvent, not ConditionWatcher.
         /// </summary>

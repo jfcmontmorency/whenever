@@ -269,6 +269,11 @@ namespace JFCartier.Whenever
                     ? condition.Evaluate(collidingObject)
                     : condition.Evaluate();
 
+                if (condition.Invert)
+                {
+                    met = !met;
+                }
+
                 if (i == 0)
                 {
                     result = met;

@@ -7,6 +7,10 @@ All notable changes to this package are documented here. Format follows
 
 ### Added
 
+- **Not** on every Condition: a checkbox in the Condition's header (visible even when it is collapsed)
+  that flips its result - true becomes false and false becomes true - before it is combined with the
+  others by And/Or. Lets any Condition express "the opposite of" without needing an inverse of its own
+  (e.g. "the player does NOT have the key"). Off by default, so existing Conditions are unchanged.
 - **Repeat**, to keep re-running the Actions at regular intervals while a zone stays occupied (e.g. lava
   that hurts every second you stand in it). A new **Repeat** option under After Trigger (offered with Do
   Nothing and Execute Exit Actions), with an **Interval** and a **Max Repeats** limit (0 = unlimited). Each
