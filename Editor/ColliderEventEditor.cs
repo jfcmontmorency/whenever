@@ -6,8 +6,12 @@ using UnityEngine;
 
 namespace JFCartier.Whenever.Editor
 {
-    [CustomEditor(typeof(ColliderEvent))]
-    public sealed class ColliderEventEditor : UnityEditor.Editor
+    /// <summary>
+    /// The Inspector for both zone types: ColliderEvent (3D) and ColliderEvent2D share every field it
+    /// draws. Unity allows only one [CustomEditor] per class, so each zone type gets its own thin subclass
+    /// at the bottom of this file.
+    /// </summary>
+    public abstract class ColliderEventEditorBase : UnityEditor.Editor
     {
         private const string AnyTagLabel = "Any";
 
@@ -28,7 +32,7 @@ namespace JFCartier.Whenever.Editor
         private ReorderableList m_ActionsList;
         private ReorderableList m_ExitActionsList;
 
-        private void OnEnable()
+        protected virtual void OnEnable()
         {
             m_HoldTime = serializedObject.FindProperty("holdTime");
             m_AfterTrigger = serializedObject.FindProperty("afterTrigger");
@@ -43,7 +47,7 @@ namespace JFCartier.Whenever.Editor
             m_Actions = serializedObject.FindProperty("actions");
             m_ExitActions = serializedObject.FindProperty("exitActions");
 
-            GameObject owner = ((ColliderEvent)target).gameObject;
+            GameObject owner = ((Component)target).gameObject;
             m_ConditionsList = ConditionActionListDrawer.Build(m_Conditions, typeof(ConditionBase), owner);
             m_ActionsList = ConditionActionListDrawer.Build(m_Actions, typeof(ActionBase), owner);
             m_ExitActionsList = ConditionActionListDrawer.Build(m_ExitActions, typeof(ActionBase), owner);
@@ -94,4 +98,10 @@ namespace JFCartier.Whenever.Editor
             }
         }
     }
+
+    [CustomEditor(typeof(ColliderEvent))]
+    public sealed class ColliderEventEditor : ColliderEventEditorBase { }
+
+    [CustomEditor(typeof(ColliderEvent2D))]
+    public sealed class ColliderEvent2DEditor : ColliderEventEditorBase { }
 }

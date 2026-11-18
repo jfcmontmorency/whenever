@@ -13,7 +13,8 @@ namespace JFCartier.Whenever.Editor
         public static bool SupportsEnteringObjects(SerializedObject elementSo)
         {
             var component = elementSo.targetObject as Component;
-            return component != null && component.GetComponent<ColliderEvent>() != null;
+            return component != null
+                && (component.GetComponent<ColliderEvent>() != null || component.GetComponent<ColliderEvent2D>() != null);
         }
     }
 }

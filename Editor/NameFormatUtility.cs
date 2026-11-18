@@ -6,6 +6,8 @@ namespace JFCartier.Whenever.Editor
     {
         /// <summary>
         /// Inserts spaces before capital letters, e.g. "LookingAtCondition" -> "Looking At Condition".
+        /// A number sticks to the capital that follows it ("Rigidbody2D" -> "Rigidbody 2D", not
+        /// "Rigidbody2 D"): a space goes before a run of digits, but never between a digit and a capital.
         /// </summary>
         public static string AddSpacesToPascalCase(string text)
         {
@@ -16,7 +18,13 @@ namespace JFCartier.Whenever.Editor
 
             for (int i = 1; i < text.Length; i++)
             {
-                if (char.IsUpper(text[i]) && !char.IsUpper(text[i - 1]))
+                char current = text[i];
+                char previous = text[i - 1];
+
+                bool startsNewWord = char.IsUpper(current) && !char.IsUpper(previous) && !char.IsDigit(previous);
+                bool startsNumber = char.IsDigit(current) && char.IsLetter(previous);
+
+                if (startsNewWord || startsNumber)
                 {
                     result.Append(' ');
                 }

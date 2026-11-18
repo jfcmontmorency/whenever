@@ -33,6 +33,7 @@ namespace JFCartier.Whenever.Editor
             Register(typeof(GameObjectAction), GameObjectActionDrawer.Draw, GameObjectActionDrawer.GetHeight);
             Register(typeof(SceneAction), SceneActionDrawer.Draw, SceneActionDrawer.GetHeight);
             Register(typeof(RigidbodyAction), RigidbodyActionDrawer.Draw, RigidbodyActionDrawer.GetHeight);
+            Register(typeof(Rigidbody2DAction), Rigidbody2DActionDrawer.Draw, Rigidbody2DActionDrawer.GetHeight);
             Register(typeof(VariableAction), VariableActionDrawer.Draw, VariableActionDrawer.GetHeight);
             Register(typeof(TransformAction), TransformActionDrawer.Draw, TransformActionDrawer.GetHeight);
             Register(typeof(InputCondition), InputConditionDrawer.Draw, InputConditionDrawer.GetHeight);

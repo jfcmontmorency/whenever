@@ -3,6 +3,22 @@
 All notable changes to this package are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **2D support.** `Collider Event 2D` (**Add Component > Whenever > Collider Event 2D**) is the 2D
+  counterpart of `Collider Event`: add it alongside any `Collider2D` set to "Is Trigger". It shares
+  everything else with the 3D version (Conditions, Actions, Hold Time, After Trigger, Hint Material, Tags
+  filter, Debug Color gizmo - drawn as a flat shape, or an outline for a Polygon Collider 2D). It uses the
+  same Inspector as `Collider Event`.
+- `Rigidbody 2D` Action: the 2D counterpart of `Rigidbody`. Changes a `Rigidbody2D`'s Body Type, Mass,
+  Linear Damping, Angular Damping and/or Gravity Scale - each with its own on/off toggle, so only the
+  ones you check are touched.
+- `Transform Action`'s "Cancel Physics While Moving" now also covers a `Rigidbody2D` (switched to
+  Kinematic for the duration of the move, then restored), not just a 3D `Rigidbody`.
+- `Looking At` stays 3D-only (it relies on the camera's facing and a 3D raycast); the README says so.
+
 ## [0.5.0]
 
 ### Added

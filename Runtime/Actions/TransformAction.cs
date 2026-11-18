@@ -41,7 +41,7 @@ namespace JFCartier.Whenever
         [Tooltip("Applies to Position and Rotation. Scale is always Local - there's no reliable way to set world scale directly.")]
         public Space space = Space.World;
 
-        [Tooltip("If the target has a Rigidbody, makes it kinematic while this runs so physics doesn't fight the scripted move. If it has a CharacterController instead, disables that component while this runs - otherwise the controller's own collision handling can silently reject or immediately undo a direct position/rotation change. Note this cancels a Rigidbody's momentum, not pauses it - a kinematic Rigidbody's velocity reads as zero, so once this restores it to non-kinematic afterward, it resumes at rest (falling fresh from the new position) rather than continuing whatever motion it had before.")]
+        [Tooltip("If the target has a Rigidbody (or a Rigidbody2D), makes it kinematic while this runs so physics doesn't fight the scripted move. If it has a CharacterController instead, disables that component while this runs - otherwise the controller's own collision handling can silently reject or immediately undo a direct position/rotation change. Note this cancels a Rigidbody's momentum, not pauses it - a kinematic Rigidbody's velocity reads as zero, so once this restores it to non-kinematic afterward, it resumes at rest (falling fresh from the new position) rather than continuing whatever motion it had before.")]
         public bool cancelPhysicsWhileMoving = true;
 
         [Tooltip("If false, the change applies instantly. If true, it plays out over Duration below.")]
@@ -62,6 +62,8 @@ namespace JFCartier.Whenever
         private Rigidbody m_SuspendedRigidbody;
         private bool m_SuspendedRigidbodyWasKinematic;
         private CharacterController m_SuspendedController;
+        private Rigidbody2D m_SuspendedRigidbody2D;
+        private RigidbodyType2D m_SuspendedRigidbody2DBodyType;
 
         public override void Execute()
         {
@@ -128,6 +130,15 @@ namespace JFCartier.Whenever
                 rb.isKinematic = true;
             }
 
+            // Same idea for a 2D Rigidbody: switch it to Kinematic for the duration of the move.
+            Rigidbody2D rb2D = targetTransform.GetComponent<Rigidbody2D>();
+            if (rb2D != null)
+            {
+                m_SuspendedRigidbody2D = rb2D;
+                m_SuspendedRigidbody2DBodyType = rb2D.bodyType;
+                rb2D.bodyType = RigidbodyType2D.Kinematic;
+            }
+
             // A CharacterController fights direct Transform edits while enabled - it re-asserts its own
             // collision-resolved position, which can make a Set look like it silently did nothing.
             // Disabling it for the duration of the move is the standard way to teleport one reliably.
@@ -145,6 +156,12 @@ namespace JFCartier.Whenever
             {
                 m_SuspendedRigidbody.isKinematic = m_SuspendedRigidbodyWasKinematic;
                 m_SuspendedRigidbody = null;
+            }
+
+            if (m_SuspendedRigidbody2D != null)
+            {
+                m_SuspendedRigidbody2D.bodyType = m_SuspendedRigidbody2DBodyType;
+                m_SuspendedRigidbody2D = null;
             }
 
             if (m_SuspendedController != null)

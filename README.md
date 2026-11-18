@@ -8,6 +8,8 @@ condition watchers, without writing code.
 - **Collider Event** - add alongside any native Collider (mark it "Is Trigger"). Waits for something to
   enter the zone, then checks the Conditions. Optionally restrict which Tags can trigger it - leave every
   box unchecked to let anything with a Collider trigger it.
+- **Collider Event 2D** - the same thing for 2D games: add alongside any Collider2D (mark it "Is Trigger").
+  See "2D games" below.
 - **Condition Watcher** - no Collider needed. Checks the Conditions continuously from the moment the
   scene starts, for things that don't happen at a place (e.g. "wait until the player has 3 keys").
 
@@ -34,6 +36,28 @@ same, and the Debug Color gizmo can still show its outline in the Scene view. (`
 ships with its Mesh Renderer disabled.) Keep the Mesh Renderer only if the zone is also meant to be a
 visible object, or if you point a Hint Material or Material Action at the zone's own Renderer.
 
+### 2D games
+
+For a 2D project, use **Collider Event 2D** instead of Collider Event. The steps are the same, with a
+2D Collider:
+
+1. Add a Collider2D to the GameObject (Box, Circle, Polygon, Capsule... any of them).
+2. Tick **Is Trigger** on it.
+3. Add **Collider Event 2D** (**Add Component > Whenever > Collider Event 2D**).
+
+Everything else - Conditions, Actions, Hold Time, After Trigger, Hint Material, the Tags filter - works
+exactly like the 3D version, and so does the advice about removing the renderer (a zone is usually an
+invisible logic area, so remove its Sprite Renderer if it has one). The Debug Color gizmo draws the zone's
+outline in the Scene view.
+
+Two things to know:
+
+- As with 3D triggers, Unity only reports a 2D trigger overlap when at least one of the two objects has a
+  **Rigidbody2D** (usually the player or whatever is moving).
+- Use the **Rigidbody 2D** Action (not Rigidbody) to change a Rigidbody2D, and note that **Looking At** is
+  designed for 3D - it measures where the camera faces and uses a 3D raycast to check for obstructions,
+  so it doesn't suit 2D scenes. Every other Condition and Action works in 2D.
+
 ## Conditions
 
 Looking At, Input, Variable, Distance, Rotation.
@@ -43,8 +67,8 @@ top to bottom (e.g. "A Or B And C" reads as "(A Or B) And C").
 
 ## Actions
 
-Animation, Audio, Scene, GameObject, Material, Rigidbody, Transform, Variable, Invoke Events, Instantiate
-Prefab.
+Animation, Audio, Scene, GameObject, Material, Rigidbody, Rigidbody 2D, Transform, Variable, Invoke Events,
+Instantiate Prefab.
 
 ## Variables
 
