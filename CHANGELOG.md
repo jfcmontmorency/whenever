@@ -5,6 +5,12 @@ All notable changes to this package are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- `Third-Party Notices.txt`, listing the third-party components bundled in the optional Demo sample (the
+  Inter font under the SIL Open Font License 1.1, and a Pixabay sound effect), as the Asset Store
+  submission guidelines require.
+
 ### Changed
 
 - **The package is now called Whenever** (previously "Collider Event System"), since it covers more than
@@ -30,6 +36,11 @@ All notable changes to this package are documented here. Format follows
 - The `Trigger Sphere` and `Trigger Capsule` starter prefabs - any other shape is a Collider plus
   Collider Event away (see "Using your own shape" in the README). `Trigger Sphere` is still used by the Demo
   sample, so it now lives in `Samples~/Demo/Prefabs` (GUID unchanged).
+- The offline PDF documentation (`Documentation/`). It duplicated the README word for word and had fallen
+  out of date; the README (Markdown, an accepted documentation format) is now the documentation.
+- The standalone `LICENSE` file (MIT) and the `license` field in `package.json`. The Asset Store rejects
+  packages that carry an independent license: everything distributed through it is covered by the Asset
+  Store End User License Agreement.
 
 ### Fixed
 

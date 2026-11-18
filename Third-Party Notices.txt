@@ -1,0 +1,15 @@
+Third-Party Notices
+
+Whenever is governed by the Unity Asset Store End User License Agreement.
+The optional Demo sample (Samples~/Demo, imported from the Package Manager window) includes the
+following third-party components, each governed by its own license:
+
+Inter (Inter-Black.ttf)
+  Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)
+  License: SIL Open Font License, Version 1.1
+  Full license text: Samples~/Demo/Fonts/LICENSE.txt
+
+New Notification 036 (universfield-new-notification-036-485897.mp3)
+  Author: Universfield
+  Source: https://pixabay.com/sound-effects/technology-new-notification-036-485897/
+  License: Pixabay Content License (https://pixabay.com/service/license-summary/)
