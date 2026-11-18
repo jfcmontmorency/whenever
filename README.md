@@ -113,11 +113,41 @@ independent value like HP without writing a script for it.
 - **Hold Time** - how many seconds the Conditions must stay true, without interruption, before Actions run.
 - **After Trigger** - what happens once Actions have run (deactivate, destroy, do nothing and reset, or
   wait and run Exit Actions once the Conditions/zone go inactive again).
+- **Repeat** - run the Actions again at regular intervals for as long as the zone stays occupied. See
+  "Repeating while inside" below.
 - **Hint Material** - optional. A material applied to a target while the Conditions above aren't all met
   yet, and automatically restored once they are (or once the zone is left before they are) - useful as a
   hint that an interaction is available, e.g. highlighting the object you can press E on until you
   actually press it. Reflects the combined Condition list result (respecting And/Or), not any single
   Condition on its own.
+
+### Repeating while inside
+
+Normally, once the Actions have run, a Collider Event doesn't fire again until the object leaves the zone
+and comes back in. Turn on **Repeat** to have it keep going instead - the typical case is lava: the zone
+hurts you the moment you step in, then again every second for as long as you stay.
+
+Under **After Trigger** (set to **Do Nothing** or **Execute Exit Actions**), tick **Repeat** and set:
+
+- **Interval** - seconds between the end of one run of the Actions and the start of the next.
+- **Max Repeats** - how many extra times to run them after the first. **0** repeats for as long as the
+  zone stays occupied.
+
+How it behaves:
+
+- Each repeat runs the **whole Action list again**, Waits included.
+- The **Conditions are re-checked** at each repeat. If they're false when a repeat is due, it waits and
+  runs as soon as they're true again - so lava can stop burning while a "fire resistant" Variable is true,
+  and resume when it isn't.
+- **Hold Time** only applies to the first run; repeats start right on their interval.
+- It stops when the object leaves the zone, or if it's destroyed or deactivated while inside. With
+  **Execute Exit Actions**, the Exit Actions run once at that point - e.g. to remove a "burning" effect.
+- Once **Max Repeats** is reached, it behaves like a normal Collider Event: the object has to leave and
+  re-enter before it fires again.
+- On a **Condition Watcher** there is no zone, so it repeats for as long as the Conditions stay true. When
+  they go false the cycle ends, and when they're true again it starts over from a first run.
+- Repeat isn't offered with **Set Inactive**, **Destroy** or **Destroy Parent**, since those remove or
+  deactivate the GameObject after the first run.
 
 ## Prefabs
 

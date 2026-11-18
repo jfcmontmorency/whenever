@@ -42,6 +42,17 @@ namespace JFCartier.Whenever
         [Tooltip("Applied to every material slot on the target Renderer while the Conditions aren't all met.")]
         public Material hintMaterial;
 
+        [Tooltip("While the zone is occupied (Condition Watcher: while the Conditions stay true), runs the Actions again every Repeat Interval seconds, re-checking the Conditions each time. Only available when After Trigger is Do Nothing or Execute Exit Actions - the other modes remove or deactivate this GameObject after the first run.")]
+        public bool repeat;
+
+        [Tooltip("Seconds between the end of one run of the Actions and the start of the next. Used when Repeat is on.")]
+        [Min(0.01f)]
+        public float repeatInterval = 1f;
+
+        [Tooltip("How many extra times to run the Actions after the first one. 0 keeps repeating for as long as the zone stays occupied. Used when Repeat is on.")]
+        [Min(0)]
+        public int maxRepeats = 0;
+
         private Renderer m_ActiveHintRenderer;
 
         /// <summary>
@@ -71,12 +82,28 @@ namespace JFCartier.Whenever
         private float m_HoldTimer;
         private Coroutine m_SequenceCoroutine;
 
+        // Repeat state: true while waiting for the next run, when that run is due, and how many runs there
+        // have been since the zone was entered (or the Conditions became true).
+        private bool m_RepeatPending;
+        private float m_RepeatAt;
+        private int m_RunCount;
+
+        private const float MinRepeatInterval = 0.01f;
+
         /// <summary>
         /// When true, Update() re-checks the condition fold while HasFired is true, and treats it flipping
         /// back to false as the exit trigger (used by ConditionWatcher, which has no physical exit event).
         /// ColliderEvent leaves this false - its exit is pushed from OnTriggerExit instead.
         /// </summary>
         protected virtual bool UseConditionFalseAsExit => false;
+
+        /// <summary>
+        /// True when whatever triggered this zone no longer counts as inside it, without a physical exit
+        /// having been reported (e.g. it was destroyed while overlapping - Unity doesn't send an exit
+        /// event for that). Repeat checks it to stop repeating for something that's gone. ColliderEvent
+        /// overrides it; ConditionWatcher has no zone, so it never applies there.
+        /// </summary>
+        protected virtual bool IsRepeatSourceGone => false;
 
         protected virtual void Start()
         {
@@ -102,6 +129,8 @@ namespace JFCartier.Whenever
             // this reset the "executing" flag would stay true forever and this could never fire again.
             m_ActionsExecuting = false;
             m_SequenceCoroutine = null;
+            m_RepeatPending = false;
+            m_RunCount = 0;
         }
 
         protected virtual void Update()
@@ -130,7 +159,17 @@ namespace JFCartier.Whenever
                 {
                     RunExitActionsAndReset();
                 }
+                else if (m_RepeatPending)
+                {
+                    TryRepeat();
+                }
 
+                return;
+            }
+
+            if (m_RepeatPending)
+            {
+                TryRepeat();
                 return;
             }
 
@@ -169,6 +208,8 @@ namespace JFCartier.Whenever
         {
             Checking = false;
             m_HoldTimer = 0f;
+            m_RepeatPending = false;
+            m_RunCount = 0;
             RevertHintMaterial();
         }
 
@@ -364,12 +405,19 @@ namespace JFCartier.Whenever
 
                 case AfterTrigger.DoNothing:
                     m_ActionsExecuting = false;
-                    ResetAfterFiring();
+
+                    // With Repeat on, this stays armed (still Checking) for the next run instead of resetting.
+                    if (!ScheduleRepeat())
+                    {
+                        ResetAfterFiring();
+                    }
+
                     break;
 
                 case AfterTrigger.ExecuteExitActions:
                     m_ActionsExecuting = false;
                     HasFired = true;
+                    ScheduleRepeat();
                     break;
             }
         }
@@ -393,11 +441,78 @@ namespace JFCartier.Whenever
             ResetAfterFiring();
         }
 
-        private void ResetAfterFiring()
-        {
-            HasFired = false;
-            m_HoldTimer = 0f;
+        /// <summary>
+        /// Repeat only makes sense when this GameObject survives its own firing: Set Inactive/Destroy remove
+        /// it after the first run.
+        /// </summary>
+        private bool RepeatApplies =>
+            repeat && (afterTrigger == AfterTrigger.DoNothing || afterTrigger == AfterTrigger.ExecuteExitActions);
 
+        /// <summary>
+        /// Called each time a run of the Actions has just finished. If another run is due, starts waiting for
+        /// it and returns true. Returns false when Repeat is off, the Max Repeats limit has been reached, or
+        /// the zone was left while the run was still going - in which case the caller carries on exactly as
+        /// it would without Repeat.
+        /// </summary>
+        private bool ScheduleRepeat()
+        {
+            m_RunCount++;
+
+            // Checking is false when the zone was left mid-run: there's nothing left to repeat for.
+            if (!RepeatApplies || !Checking) return false;
+
+            // m_RunCount counts the first run too, so Max Repeats extra runs means m_RunCount up to Max + 1.
+            if (maxRepeats > 0 && m_RunCount > maxRepeats) return false;
+
+            ResetElements();
+            m_RepeatAt = Time.time + Mathf.Max(repeatInterval, MinRepeatInterval);
+            m_RepeatPending = true;
+            return true;
+        }
+
+        /// <summary>
+        /// While a repeat is pending: once it's due and the Conditions are true, runs the Actions again.
+        /// Hold Time only applies to the first run, so a repeat starts straight away.
+        /// </summary>
+        private void TryRepeat()
+        {
+            if (IsRepeatSourceGone)
+            {
+                // Whatever triggered this was destroyed or deactivated and no exit was reported: treat it
+                // as having left.
+                if (HasFired)
+                {
+                    RunExitActionsAndReset();
+                }
+                else
+                {
+                    ResetAfterFiring();
+                }
+
+                return;
+            }
+
+            if (Time.time < m_RepeatAt) return;
+
+            if (!EvaluateConditions())
+            {
+                // A Condition Watcher has no zone, so its Conditions going false is what ends a repeating
+                // cycle - the same role leaving plays for a Collider Event, which instead just waits here
+                // for them to be true again while the object is still inside.
+                if (UseConditionFalseAsExit && !HasFired)
+                {
+                    ResetAfterFiring();
+                }
+
+                return;
+            }
+
+            m_RepeatPending = false;
+            m_SequenceCoroutine = StartCoroutine(RunActionsCoroutine());
+        }
+
+        private void ResetElements()
+        {
             for (int i = 0; i < conditions.Count; i++)
             {
                 if (conditions[i]) conditions[i].ResetState();
@@ -407,6 +522,16 @@ namespace JFCartier.Whenever
             {
                 if (actions[i]) actions[i].ResetState();
             }
+        }
+
+        private void ResetAfterFiring()
+        {
+            HasFired = false;
+            m_HoldTimer = 0f;
+            m_RepeatPending = false;
+            m_RunCount = 0;
+
+            ResetElements();
 
             OnFiredAndReset();
         }

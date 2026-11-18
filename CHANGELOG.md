@@ -7,6 +7,15 @@ All notable changes to this package are documented here. Format follows
 
 ### Added
 
+- **Repeat**, to keep re-running the Actions at regular intervals while a zone stays occupied (e.g. lava
+  that hurts every second you stand in it). A new **Repeat** option under After Trigger (offered with Do
+  Nothing and Execute Exit Actions), with an **Interval** and a **Max Repeats** limit (0 = unlimited). Each
+  repeat re-runs the whole Action list, Waits included, and re-checks the Conditions first - if they're
+  false when a repeat is due, it runs as soon as they're true again. Hold Time only applies to the first
+  run. It stops when the object leaves the zone, or is destroyed or deactivated while inside (with Execute
+  Exit Actions, the Exit Actions then run once). On a Condition Watcher it repeats while the Conditions stay
+  true. Works on `Collider Event`, `Collider Event 2D` and `Condition Watcher`.
+
 - **`Wait` Action**, to run Actions one after another instead of all at once. Everything above a Wait runs
   first, the list then pauses, and everything below it runs once the wait is over. Two modes: **Seconds**
   (a fixed time) or **Until Previous Actions Finish** (the longest-running Action above it). It also works

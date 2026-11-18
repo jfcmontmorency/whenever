@@ -20,6 +20,10 @@ namespace JFCartier.Whenever
 
         private Collider m_Collider;
 
+        // Unity sends no OnTriggerExit when the overlapping object is destroyed or deactivated, so Repeat
+        // checks for that itself instead of repeating for something that's gone.
+        protected override bool IsRepeatSourceGone => collidingObject == null || !collidingObject.activeInHierarchy;
+
         protected override void Start()
         {
             base.Start();

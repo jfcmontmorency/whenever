@@ -10,10 +10,28 @@ namespace JFCartier.Whenever.Editor
     /// </summary>
     public static class ColliderEventEditorShared
     {
-        public static void DrawCommonFields(SerializedProperty holdTime, SerializedProperty afterTrigger)
+        public static void DrawCommonFields(
+            SerializedProperty holdTime,
+            SerializedProperty afterTrigger,
+            SerializedProperty repeat,
+            SerializedProperty repeatInterval,
+            SerializedProperty maxRepeats)
         {
             EditorGUILayout.PropertyField(holdTime, new GUIContent("Hold Time", holdTime.tooltip));
             EditorGUILayout.PropertyField(afterTrigger);
+
+            // Repeat needs this GameObject to still be there after the first run, which Set Inactive and
+            // the Destroy modes don't allow - so it only shows for the two modes that keep it around.
+            AfterTrigger mode = (AfterTrigger)afterTrigger.enumValueIndex;
+            if (mode != AfterTrigger.DoNothing && mode != AfterTrigger.ExecuteExitActions) return;
+
+            EditorGUILayout.PropertyField(repeat);
+            if (!repeat.boolValue) return;
+
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(repeatInterval);
+            EditorGUILayout.PropertyField(maxRepeats);
+            EditorGUI.indentLevel--;
         }
 
         public static void DrawDebugLogging(SerializedProperty debugLogging)
