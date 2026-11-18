@@ -18,6 +18,12 @@ All notable changes to this package are documented here. Format follows
 - `Transform Action`'s "Cancel Physics While Moving" now also covers a `Rigidbody2D` (switched to
   Kinematic for the duration of the move, then restored), not just a 3D `Rigidbody`.
 - `Looking At` stays 3D-only (it relies on the camera's facing and a 3D raycast); the README says so.
+- `Trigger Zone 2D` starter prefab: a Box Collider 2D ("Is Trigger") with a Collider Event 2D attached.
+
+### Changed
+
+- The `Trigger Zone` starter prefab is now `Trigger Zone 3D`, to sit next to `Trigger Zone 2D`. Its GUID
+  is unchanged, so existing references keep working.
 
 ## [0.5.0]
 

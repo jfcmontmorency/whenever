@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 1912418967609095518}
   - component: {fileID: 178535627725073038}
   m_Layer: 0
-  m_Name: Trigger Zone
+  m_Name: Trigger Zone 3D
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

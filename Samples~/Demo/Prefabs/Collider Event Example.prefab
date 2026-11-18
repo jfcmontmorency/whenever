@@ -415,7 +415,7 @@ PrefabInstance:
       objectReference: {fileID: 2100000, guid: ffe6a183fccbd46b488e6c7c793d7efd, type: 2}
     - target: {fileID: 7943089749138282332, guid: 1d70f6daaadb94b568a178e5b96eca50, type: 3}
       propertyPath: m_Name
-      value: Trigger Zone
+      value: Trigger Zone 3D
       objectReference: {fileID: 0}
     - target: {fileID: 7943089749138282332, guid: 1d70f6daaadb94b568a178e5b96eca50, type: 3}
       propertyPath: m_IsActive

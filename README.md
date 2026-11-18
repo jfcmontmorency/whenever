@@ -15,7 +15,8 @@ condition watchers, without writing code.
 
 ## Quick start
 
-1. Drag the ready-made `Trigger Zone` prefab (in this package's `Prefabs` folder) into your scene.
+1. Drag a ready-made prefab (in this package's `Prefabs` folder) into your scene: `Trigger Zone 3D` for a
+   3D project, `Trigger Zone 2D` for a 2D one.
 2. Under Conditions, click "Add Condition" and pick one (e.g. Distance).
 3. Under Actions, click "Add Action" and pick one (e.g. Invoke Events).
 4. Enter Play Mode and walk into the zone.
@@ -32,14 +33,14 @@ Collider, anything. The shape is yours to choose:
 You will usually also want to **remove the Mesh Renderer** (and its Mesh Filter). A Collider Event is most
 often a logic zone - "the player reached this spot" - that isn't meant to be seen in the game, only to
 detect something. Without a Mesh Renderer the zone is invisible at runtime but still works exactly the
-same, and the Debug Color gizmo can still show its outline in the Scene view. (`Trigger Zone` already
+same, and the Debug Color gizmo can still show its outline in the Scene view. (`Trigger Zone 3D` already
 ships with its Mesh Renderer disabled.) Keep the Mesh Renderer only if the zone is also meant to be a
 visible object, or if you point a Hint Material or Material Action at the zone's own Renderer.
 
 ### 2D games
 
-For a 2D project, use **Collider Event 2D** instead of Collider Event. The steps are the same, with a
-2D Collider:
+For a 2D project, use **Collider Event 2D** instead of Collider Event - or just drag in the ready-made
+`Trigger Zone 2D` prefab. To build one yourself, the steps are the same as above, with a 2D Collider:
 
 1. Add a Collider2D to the GameObject (Box, Circle, Polygon, Capsule... any of them).
 2. Tick **Is Trigger** on it.
@@ -94,9 +95,12 @@ independent value like HP without writing a script for it.
 
 ## Prefabs
 
-`Prefabs/` has one ready-made prefab, `Trigger Zone` - a Box Collider set to "Is Trigger" with a
-Collider Event already attached, ready to drag into a scene as shown in Quick start. For any other shape,
-see "Using your own shape" above.
+`Prefabs/` has two ready-made prefabs, ready to drag into a scene as shown in Quick start:
+
+- `Trigger Zone 3D` - a Box Collider set to "Is Trigger" with a Collider Event already attached.
+- `Trigger Zone 2D` - a Box Collider 2D set to "Is Trigger" with a Collider Event 2D already attached.
+
+For any other shape, see "Using your own shape" above.
 
 ## Sample
 
