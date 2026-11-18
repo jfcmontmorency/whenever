@@ -44,7 +44,7 @@ namespace JFCartier.Whenever
         {
             if (collidingObject != other.gameObject) return;
 
-            if (afterTrigger == AfterTrigger.ExecuteExitActions && HasFired)
+            if (afterTrigger == AfterTrigger.ExecuteExitActions && (HasFired || IsExecutingActions))
             {
                 TriggerExit();
             }

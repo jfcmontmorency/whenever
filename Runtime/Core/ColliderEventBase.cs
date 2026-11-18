@@ -7,7 +7,8 @@ namespace JFCartier.Whenever
     /// <summary>
     /// Shared logic for ColliderEvent (zone-based) and ConditionWatcher (always-on). Holds the ordered
     /// Condition/Action lists, folds Conditions left-to-right with each condition's And/Or Operator,
-    /// waits for Minimum Hold Time, runs Actions once, then applies After Trigger.
+    /// waits for Minimum Hold Time, runs Actions once - in list order, pausing at any Wait Action - then
+    /// applies After Trigger.
     /// </summary>
     [DisallowMultipleComponent]
     public abstract class ColliderEventBase : MonoBehaviour
@@ -60,8 +61,15 @@ namespace JFCartier.Whenever
         /// </summary>
         protected bool HasFired { get; private set; }
 
+        /// <summary>
+        /// True while the Action list is still running - between the first Action starting and the last
+        /// one being reached, which lasts longer than a single frame once the list contains a Wait.
+        /// </summary>
+        protected bool IsExecutingActions => m_ActionsExecuting;
+
         private bool m_ActionsExecuting;
         private float m_HoldTimer;
+        private Coroutine m_SequenceCoroutine;
 
         /// <summary>
         /// When true, Update() re-checks the condition fold while HasFired is true, and treats it flipping
@@ -88,10 +96,31 @@ namespace JFCartier.Whenever
             }
         }
 
+        protected virtual void OnDisable()
+        {
+            // Disabling this component stops its coroutines, including a running Action sequence. Without
+            // this reset the "executing" flag would stay true forever and this could never fire again.
+            m_ActionsExecuting = false;
+            m_SequenceCoroutine = null;
+        }
+
         protected virtual void Update()
         {
-            if (!Checking || m_ActionsExecuting)
+            if (!Checking)
             {
+                return;
+            }
+
+            if (m_ActionsExecuting)
+            {
+                // Execute Exit Actions on a Condition Watcher: it has no physical exit event, so the
+                // Conditions going false is the exit - including while the Action sequence is still
+                // running (e.g. paused on a Wait), which cuts the sequence short.
+                if (UseConditionFalseAsExit && afterTrigger == AfterTrigger.ExecuteExitActions && !EvaluateConditions())
+                {
+                    TriggerExit();
+                }
+
                 return;
             }
 
@@ -114,7 +143,7 @@ namespace JFCartier.Whenever
 
                 if (m_HoldTimer >= holdTime)
                 {
-                    StartCoroutine(RunActionsCoroutine());
+                    m_SequenceCoroutine = StartCoroutine(RunActionsCoroutine());
                 }
             }
             else
@@ -144,12 +173,25 @@ namespace JFCartier.Whenever
         }
 
         /// <summary>
-        /// Called by ColliderEvent's OnTriggerExit when the colliding object leaves while AfterTrigger is
-        /// ExecuteExitActions and Actions have already run. Runs Exit Actions and resets state.
+        /// Called by the zone subclasses' OnTriggerExit when the colliding object leaves while AfterTrigger
+        /// is ExecuteExitActions, once Actions have run or are still running. If the Action list is still
+        /// running (e.g. paused on a Wait), it is cut short here. Then runs Exit Actions and resets state.
         /// </summary>
         protected void TriggerExit()
         {
-            if (HasFired && afterTrigger == AfterTrigger.ExecuteExitActions)
+            if (afterTrigger != AfterTrigger.ExecuteExitActions)
+            {
+                return;
+            }
+
+            if (m_ActionsExecuting)
+            {
+                StopSequence();
+                m_ActionsExecuting = false;
+                HasFired = true;
+            }
+
+            if (HasFired)
             {
                 RunExitActionsAndReset();
             }
@@ -220,21 +262,45 @@ namespace JFCartier.Whenever
             m_ActiveHintRenderer = null;
         }
 
-        private IEnumerator RunActionsCoroutine()
+        private void StopSequence()
         {
-            m_ActionsExecuting = true;
+            if (m_SequenceCoroutine == null) return;
 
-            if (debugLogging)
+            StopCoroutine(m_SequenceCoroutine);
+            m_SequenceCoroutine = null;
+        }
+
+        /// <summary>
+        /// Runs a list of Actions in order. Each Action starts as soon as the one above it has been started
+        /// (they don't wait for each other to finish), except at a Wait, which pauses the rest of the list.
+        /// A list without any Wait therefore runs entirely within a single call, same frame, as it always did.
+        /// </summary>
+        /// <param name="list">The Actions or Exit Actions to run.</param>
+        /// <param name="waitForAllToFinish">
+        /// If true, ends only once the longest-running Action started has finished. Needed before Set
+        /// Inactive/Destroy, which would otherwise cut an Action off mid-animation.
+        /// </param>
+        private IEnumerator RunActionList(List<ActionBase> list, bool waitForAllToFinish)
+        {
+            // When the longest-running Action started so far will be done (absolute scaled time).
+            float finishAt = Time.time;
+
+            for (int i = 0; i < list.Count; i++)
             {
-                Debug.Log(gameObject.name + " (Whenever) fired.", this);
-            }
-
-            float waitTime = 0f;
-
-            for (int i = 0; i < actions.Count; i++)
-            {
-                ActionBase action = actions[i];
+                ActionBase action = list[i];
                 if (!action) continue;
+
+                if (action.PausesSequence)
+                {
+                    float pause = action.GetPauseSeconds(Mathf.Max(0f, finishAt - Time.time));
+
+                    if (pause > 0f)
+                    {
+                        yield return new WaitForSeconds(pause);
+                    }
+
+                    continue;
+                }
 
                 if (action.RequiresCollisionObjectData)
                 {
@@ -245,17 +311,41 @@ namespace JFCartier.Whenever
                     action.Execute();
                 }
 
-                if (action.Duration > waitTime)
+                float end = Time.time + action.Duration;
+                if (end > finishAt)
                 {
-                    waitTime = action.Duration;
+                    finishAt = end;
                 }
             }
 
-            if (afterTrigger == AfterTrigger.SetInactive ||
-                afterTrigger == AfterTrigger.Destroy ||
-                afterTrigger == AfterTrigger.DestroyParent)
+            // Always yields at least once here (even when nothing is still running), as the old single
+            // WaitForSeconds(longest Duration) did, so Set Inactive/Destroy still land a frame later.
+            if (waitForAllToFinish)
             {
-                yield return new WaitForSeconds(waitTime);
+                yield return new WaitForSeconds(Mathf.Max(0f, finishAt - Time.time));
+            }
+        }
+
+        private IEnumerator RunActionsCoroutine()
+        {
+            m_ActionsExecuting = true;
+
+            if (debugLogging)
+            {
+                Debug.Log(gameObject.name + " (Whenever) fired.", this);
+            }
+
+            bool waitForAllToFinish = afterTrigger == AfterTrigger.SetInactive ||
+                                      afterTrigger == AfterTrigger.Destroy ||
+                                      afterTrigger == AfterTrigger.DestroyParent;
+
+            // Driven by hand rather than with "yield return RunActionList(...)": that way a list with no
+            // Wait still completes inside the very call that started this coroutine, instead of taking a
+            // frame, exactly like the single loop that used to live here.
+            IEnumerator sequence = RunActionList(actions, waitForAllToFinish);
+            while (sequence.MoveNext())
+            {
+                yield return sequence.Current;
             }
 
             switch (afterTrigger)
@@ -296,20 +386,9 @@ namespace JFCartier.Whenever
                 Debug.Log(gameObject.name + " (Whenever) exited.", this);
             }
 
-            for (int i = 0; i < exitActions.Count; i++)
-            {
-                ActionBase action = exitActions[i];
-                if (!action) continue;
-
-                if (action.RequiresCollisionObjectData)
-                {
-                    action.Execute(collidingObject);
-                }
-                else
-                {
-                    action.Execute();
-                }
-            }
+            // Exit Actions can contain a Wait too. A list without one still runs completely inside this
+            // call; with one, the rest of it carries on after the reset below.
+            StartCoroutine(RunActionList(exitActions, false));
 
             ResetAfterFiring();
         }

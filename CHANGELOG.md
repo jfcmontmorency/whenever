@@ -3,6 +3,27 @@
 All notable changes to this package are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **`Wait` Action**, to run Actions one after another instead of all at once. Everything above a Wait runs
+  first, the list then pauses, and everything below it runs once the wait is over. Two modes: **Seconds**
+  (a fixed time) or **Until Previous Actions Finish** (the longest-running Action above it). It also works
+  in the Exit Actions list. A list without a Wait behaves exactly as before.
+
+### Changed
+
+- Leaving a zone (or, on a Condition Watcher, the Conditions going false) while the Action list is still
+  running - which can now last longer than a frame, because of Wait - lets the sequence run to the end,
+  except with **After Trigger > Execute Exit Actions**, where it cuts the sequence short and runs the Exit
+  Actions straight away.
+
+### Fixed
+
+- A Collider Event / Condition Watcher disabled while its Actions were still running (for example by one of
+  those Actions) could stay stuck and never fire again; it now recovers when re-enabled.
+
 ## [0.6.0]
 
 ### Added

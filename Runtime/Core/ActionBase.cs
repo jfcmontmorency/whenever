@@ -22,6 +22,22 @@ namespace JFCartier.Whenever
         public virtual float Duration => 0f;
 
         /// <summary>
+        /// If true, this Action doesn't do anything itself when its turn comes: it pauses the rest of the
+        /// Action list instead (see GetPauseSeconds). Only WaitAction needs this - every other Action leaves
+        /// it false and just runs.
+        /// </summary>
+        public virtual bool PausesSequence => false;
+
+        /// <summary>
+        /// Only called when PausesSequence is true, in place of Execute(). Returns how many seconds the
+        /// Actions below this one should wait before they run.
+        /// </summary>
+        /// <param name="secondsUntilPreviousActionsFinish">
+        /// How much longer the longest-running Action started so far (above this one) still has to run.
+        /// </param>
+        public virtual float GetPauseSeconds(float secondsUntilPreviousActionsFinish) => 0f;
+
+        /// <summary>
         /// Runs this action.
         /// </summary>
         public abstract void Execute();

@@ -69,7 +69,33 @@ top to bottom (e.g. "A Or B And C" reads as "(A Or B) And C").
 ## Actions
 
 Animation, Audio, Scene, GameObject, Material, Rigidbody, Rigidbody 2D, Transform, Variable, Invoke Events,
-Instantiate Prefab.
+Instantiate Prefab, Wait.
+
+### Running Actions one after another
+
+By default, every Action in the list starts at the same moment, top to bottom. To space them out in time,
+put a **Wait** Action between them: everything above it runs first, the list then pauses, and everything
+below it runs once the wait is over.
+
+Wait has two modes:
+
+- **Seconds** - waits a fixed time.
+- **Until Previous Actions Finish** - waits for the longest-running Action above it (e.g. a Transform
+  animated over 2 seconds), however long that turns out to be.
+
+For example: *Transform* (move the door, animated over 2 s) -> *Wait: Until Previous Actions Finish* ->
+*Audio* (play a "done" sound) opens the door, then plays the sound once it has finished opening. A list
+with no Wait behaves exactly as before.
+
+A few details:
+
+- Wait also works in the Exit Actions list.
+- Once a sequence has started, it runs to the end even if the object leaves the zone (a door that is
+  opening doesn't stop because you stepped away). The exception is **After Trigger > Execute Exit
+  Actions**: there, leaving the zone cuts the sequence short and runs the Exit Actions straight away. On a
+  Condition Watcher in that mode, the Conditions going false does the same - so they need to stay true
+  for the whole sequence.
+- **Set Inactive**, **Destroy** and **Destroy Parent** wait for the whole sequence to finish first.
 
 ## Variables
 
