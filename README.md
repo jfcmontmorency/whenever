@@ -9,7 +9,8 @@ condition watchers, without writing code.
   enter the zone, then checks the Conditions. Optionally restrict which Tags can trigger it - leave every
   box unchecked to let anything with a Collider trigger it. With several objects inside at once, the zone
   stays occupied until the **last** one has left (that's when Repeat stops and Exit Actions run), and the
-  Actions set to **Entering Objects** act on the most recent one still inside.
+  Actions set to **Entering Objects** act on the most recent one still inside. To treat every object
+  separately instead, set **Trigger For** to **Each Object** - see "Several objects in the zone" below.
 - **Collider Event 2D** - the same thing for 2D games: add alongside any Collider2D (mark it "Is Trigger").
   See "2D games" below.
 - **Condition Watcher** - no Collider needed. Checks the Conditions continuously from the moment the
@@ -164,6 +165,40 @@ How it behaves:
   they go false the cycle ends, and when they're true again it starts over from a first run.
 - Repeat isn't offered with **Set Inactive**, **Destroy** or **Destroy Parent**, since those remove or
   deactivate the GameObject after the first run.
+
+### Several objects in the zone
+
+A Collider Event has a **Trigger For** setting:
+
+- **Zone** (default) - the zone as a whole runs once, however many objects are inside. It stays occupied
+  until the last one has left, and Entering Objects Actions act on the most recent one still inside. Right
+  for "something is in the room": a light, a door, a music change.
+- **Each Object** - every object that enters gets its **own run**. Right for lava, a healing field, a
+  slowing mud patch: anything that should affect each object separately.
+
+In **Each Object** mode:
+
+- Each object has its own **Hold Time**, its own **Repeat** (own interval, own Max Repeats) and its own
+  exit. Two objects entering in the same frame, or while another is still waiting out its Hold Time, are
+  all handled; Actions set to **Entering Objects** act on each one.
+- An object leaving only ends **its** run. With **Execute Exit Actions**, the Exit Actions run for that
+  object alone (Entering Objects Exit Actions act on it); the others carry on. A run that has already
+  started still finishes, as usual. An object destroyed or deactivated while inside ends its own run too.
+- Each object has to leave and come back before it fires again (unless Repeat is on), exactly like a
+  single object in Zone mode.
+- **Set Inactive**, **Destroy** and **Destroy Parent** aren't offered: they would remove the whole zone
+  after the first object.
+- Conditions are checked separately for each object, so a Condition of your own that uses the object
+  (`RequiresCollisionObjectData`) sees the right one. Hint Material applies to each object too.
+
+Two limits, both because Actions are shared by all the objects:
+
+- A **Transform** set to animate, and an **Animation** Action playing a clip, each hold a single running
+  animation: with several objects at once, the newest run replaces the one before it. For those, use
+  instant changes, or keep Trigger For on Zone.
+- **Audio** plays one AudioSource, so objects share it - they don't each get a sound of their own.
+
+Material, Rigidbody, Variable, Invoke Events, Instantiate Prefab and GameObject Actions have no such limit.
 
 ## Prefabs
 

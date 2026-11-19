@@ -3,6 +3,30 @@
 All notable changes to this package are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.0]
+
+### Added
+
+- **Trigger For** on `Collider Event` and `Collider Event 2D`, with two choices:
+  - **Zone** (the default, and exactly how it worked before): the zone as a whole runs once, however many
+    objects are inside.
+  - **Each Object**: every object that enters gets its own run - its own Hold Time, its own repeats and
+    its own exit. A lava zone hurts each object on its own rhythm, objects entering in the same frame are
+    all handled, and Actions set to **Entering Objects** act on each one in turn. Leaving only ends that
+    object's run (with Execute Exit Actions, the Exit Actions run for it alone); a run already started
+    still finishes. An object destroyed or deactivated while inside ends its own run.
+- In **Each Object** mode **Set Inactive**, **Destroy** and **Destroy Parent** are not offered (they would
+  remove the whole zone after the first object).
+
+### Notes
+
+- Conditions are checked separately for each object, so a custom Condition that uses the object (one that
+  overrides `RequiresCollisionObjectData`) sees the right one. Hint Material applies per object too.
+- Actions are shared by all the objects. A **Transform** set to animate, and an **Animation** Action playing
+  a clip, each hold a single running animation, so with several objects at once the newest run replaces
+  the one before it (use instant changes, or Zone mode, for those). **Audio** plays one AudioSource, which
+  the objects share.
+
 ## [0.7.1]
 
 ### Fixed

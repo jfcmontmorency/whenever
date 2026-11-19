@@ -10,7 +10,9 @@ namespace JFCartier.Whenever.Editor
     /// </summary>
     public static class ColliderEventEditorShared
     {
+        /// <param name="triggerFor">Only a zone has one (Zone / Each Object); Condition Watcher passes null.</param>
         public static void DrawCommonFields(
+            SerializedProperty triggerFor,
             SerializedProperty holdTime,
             SerializedProperty afterTrigger,
             SerializedProperty repeat,
@@ -18,8 +20,23 @@ namespace JFCartier.Whenever.Editor
             SerializedProperty maxRepeats,
             SerializedProperty exitActionsWhenRepeatsFinish)
         {
+            bool eachObject = triggerFor != null && (TriggerFor)triggerFor.enumValueIndex == TriggerFor.EachObject;
+
+            if (triggerFor != null)
+            {
+                EditorGUILayout.PropertyField(triggerFor, new GUIContent("Trigger For", triggerFor.tooltip));
+            }
+
             EditorGUILayout.PropertyField(holdTime, new GUIContent("Hold Time", holdTime.tooltip));
-            EditorGUILayout.PropertyField(afterTrigger);
+
+            if (eachObject)
+            {
+                DrawAfterTriggerForEachObject(afterTrigger);
+            }
+            else
+            {
+                EditorGUILayout.PropertyField(afterTrigger);
+            }
 
             // Repeat needs this GameObject to still be there after the first run, which Set Inactive and
             // the Destroy modes don't allow - so it only shows for the two modes that keep it around.
@@ -41,6 +58,28 @@ namespace JFCartier.Whenever.Editor
             }
 
             EditorGUI.indentLevel--;
+        }
+
+        /// <summary>
+        /// With Trigger For = Each Object, Set Inactive and the Destroy modes would remove the whole zone
+        /// after the first object, for everyone - so they aren't offered (and an existing one becomes Do Nothing).
+        /// </summary>
+        private static void DrawAfterTriggerForEachObject(SerializedProperty afterTrigger)
+        {
+            AfterTrigger mode = (AfterTrigger)afterTrigger.enumValueIndex;
+            int current = mode == AfterTrigger.ExecuteExitActions ? 1 : 0;
+
+            int chosen = EditorGUILayout.Popup(
+                new GUIContent("After Trigger", afterTrigger.tooltip),
+                current,
+                new[] { "Do Nothing", "Execute Exit Actions" });
+
+            AfterTrigger newMode = chosen == 1 ? AfterTrigger.ExecuteExitActions : AfterTrigger.DoNothing;
+
+            if (newMode != mode)
+            {
+                afterTrigger.enumValueIndex = (int)newMode;
+            }
         }
 
         public static void DrawDebugLogging(SerializedProperty debugLogging)

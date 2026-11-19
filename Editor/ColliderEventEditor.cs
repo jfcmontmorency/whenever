@@ -15,6 +15,7 @@ namespace JFCartier.Whenever.Editor
     {
         private const string AnyTagLabel = "Any";
 
+        private SerializedProperty m_TriggerFor;
         private SerializedProperty m_HoldTime;
         private SerializedProperty m_AfterTrigger;
         private SerializedProperty m_Repeat;
@@ -38,6 +39,7 @@ namespace JFCartier.Whenever.Editor
 
         protected virtual void OnEnable()
         {
+            m_TriggerFor = serializedObject.FindProperty("triggerFor");
             m_HoldTime = serializedObject.FindProperty("holdTime");
             m_AfterTrigger = serializedObject.FindProperty("afterTrigger");
             m_Repeat = serializedObject.FindProperty("repeat");
@@ -74,7 +76,7 @@ namespace JFCartier.Whenever.Editor
             EditorGUILayout.PropertyField(m_DebugColor);
             ColliderEventEditorShared.DrawDebugLogging(m_DebugLogging);
 
-            ColliderEventEditorShared.DrawCommonFields(m_HoldTime, m_AfterTrigger, m_Repeat, m_RepeatInterval, m_MaxRepeats, m_ExitActionsWhenRepeatsFinish);
+            ColliderEventEditorShared.DrawCommonFields(m_TriggerFor, m_HoldTime, m_AfterTrigger, m_Repeat, m_RepeatInterval, m_MaxRepeats, m_ExitActionsWhenRepeatsFinish);
             ColliderEventEditorShared.DrawHintMaterial(serializedObject, m_ShowHintMaterial, m_HintTargetMode, m_HintRenderer, m_HintMaterial);
             ColliderEventEditorShared.DrawLists(m_ConditionsList, m_ActionsList, m_ExitActionsList, m_AfterTrigger);
 

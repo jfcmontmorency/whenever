@@ -56,11 +56,46 @@ namespace JFCartier.Whenever
         [Tooltip("Only with After Trigger set to Execute Exit Actions and a Max Repeats above 0: runs the Exit Actions as soon as the last repeat has finished, instead of waiting for the object to leave. The cycle then ends as if it had left - the Exit Actions don't run a second time when it does.")]
         public bool exitActionsWhenRepeatsFinish;
 
-        private Renderer m_ActiveHintRenderer;
+        [Tooltip("Zone: the zone as a whole fires once, however many objects are inside. Each Object: every object that enters gets its own run - its own Hold Time, repeats and exit - so Actions set to Entering Objects act on each one in turn.")]
+        public TriggerFor triggerFor = TriggerFor.Zone;
 
         /// <summary>
-        /// The GameObject that triggered this, when relevant. Set by the owning subclass. Passed to
-        /// Conditions/Actions whose RequiresCollisionObjectData is true.
+        /// The state of one run of the Conditions -> Hold Time -> Actions -> After Trigger cycle. A zone in
+        /// Zone mode (and a Condition Watcher) has exactly one, m_Zone. In Each Object mode every object
+        /// inside the zone has its own, so each one gets its own Hold Time, repeats and exit.
+        /// </summary>
+        private sealed class Cycle
+        {
+            // Each Object mode only: the object this cycle belongs to. The Zone cycle follows collidingObject.
+            public GameObject Target;
+
+            public bool Checking;
+            public bool HasFired;
+            public bool ActionsExecuting;
+            public float HoldTimer;
+            public Coroutine Sequence;
+
+            // Repeat state: true while waiting for the next run, when that run is due, and how many runs
+            // there have been since the zone was entered (or the Conditions became true).
+            public bool RepeatPending;
+            public float RepeatAt;
+            public int RunCount;
+
+            public bool FinishingRepeats;
+
+            // The Renderer currently wearing the Hint Material on behalf of this cycle, if any.
+            public Renderer HintRenderer;
+        }
+
+        private readonly Cycle m_Zone = new Cycle();
+        private readonly List<Cycle> m_ObjectCycles = new List<Cycle>();
+
+        private const float MinRepeatInterval = 0.01f;
+
+        /// <summary>
+        /// The GameObject that triggered this, when relevant. Set by the owning subclass in Zone mode. Passed
+        /// to Conditions/Actions whose RequiresCollisionObjectData is true. In Each Object mode every
+        /// object has its own and this is unused.
         /// </summary>
         protected GameObject collidingObject;
 
@@ -68,38 +103,55 @@ namespace JFCartier.Whenever
         /// Whether Update() should currently be folding the condition list. Controlled by BeginChecking()/
         /// StopChecking(), not polled - subclasses push state changes instead of Update() polling for them.
         /// </summary>
-        protected bool Checking { get; private set; }
+        protected bool Checking => m_Zone.Checking;
 
         /// <summary>
         /// True from the moment Actions have run (with AfterTrigger.ExecuteExitActions) until Exit Actions fire.
         /// </summary>
-        protected bool HasFired { get; private set; }
+        protected bool HasFired => m_Zone.HasFired;
 
         /// <summary>
         /// True while the Action list is still running - between the first Action starting and the last
         /// one being reached, which lasts longer than a single frame once the list contains a Wait.
         /// </summary>
-        protected bool IsExecutingActions => m_ActionsExecuting;
-
-        private bool m_ActionsExecuting;
-        private float m_HoldTimer;
-        private Coroutine m_SequenceCoroutine;
-
-        // Repeat state: true while waiting for the next run, when that run is due, and how many runs there
-        // have been since the zone was entered (or the Conditions became true).
-        private bool m_RepeatPending;
-        private float m_RepeatAt;
-        private int m_RunCount;
-
-        private const float MinRepeatInterval = 0.01f;
-
-        private bool m_FinishingRepeats;
+        protected bool IsExecutingActions => m_Zone.ActionsExecuting;
 
         /// <summary>
         /// True only while the Exit Actions are being run because a limited series of repeats just ended
         /// (as opposed to the object leaving). ConditionWatcher reads it from OnFiredAndReset().
         /// </summary>
-        protected bool IsFinishingRepeats => m_FinishingRepeats;
+        protected bool IsFinishingRepeats => m_Zone.FinishingRepeats;
+
+        /// <summary>
+        /// Whether this component can give every object its own run (Trigger For = Each Object). Only the
+        /// zones can: a Condition Watcher has no objects.
+        /// </summary>
+        protected virtual bool SupportsEachObject => false;
+
+        /// <summary>
+        /// True when objects entering the zone each get a run of their own.
+        /// </summary>
+        protected bool EachObject => SupportsEachObject && triggerFor == TriggerFor.EachObject;
+
+        /// <summary>
+        /// After Trigger as actually applied. Set Inactive/Destroy/Destroy Parent would remove the whole
+        /// zone for every object after the first one, so Each Object treats them as Do Nothing.
+        /// </summary>
+        protected AfterTrigger EffectiveAfterTrigger
+        {
+            get
+            {
+                if (EachObject &&
+                    (afterTrigger == AfterTrigger.SetInactive ||
+                     afterTrigger == AfterTrigger.Destroy ||
+                     afterTrigger == AfterTrigger.DestroyParent))
+                {
+                    return AfterTrigger.DoNothing;
+                }
+
+                return afterTrigger;
+            }
+        }
 
         /// <summary>
         /// When true, Update() re-checks the condition fold while HasFired is true, and treats it flipping
@@ -109,10 +161,10 @@ namespace JFCartier.Whenever
         protected virtual bool UseConditionFalseAsExit => false;
 
         /// <summary>
-        /// Called at the start of every Update() while checking. A zone overrides it to bring collidingObject
-        /// up to date with who is actually inside (and to react if nobody is left), because Unity sends no
-        /// exit event for an object that is destroyed or deactivated while overlapping a trigger.
-        /// ConditionWatcher has no zone, so it leaves this empty.
+        /// Called at the start of every Update() while checking, in Zone mode. A zone overrides it to bring
+        /// collidingObject up to date with who is actually inside (and to react if nobody is left), because
+        /// Unity sends no exit event for an object that is destroyed or deactivated while overlapping a
+        /// trigger. ConditionWatcher has no zone, so it leaves this empty.
         /// </summary>
         protected virtual void RefreshOccupants() { }
 
@@ -138,15 +190,21 @@ namespace JFCartier.Whenever
         {
             // Disabling this component stops its coroutines, including a running Action sequence. Without
             // this reset the "executing" flag would stay true forever and this could never fire again.
-            m_ActionsExecuting = false;
-            m_SequenceCoroutine = null;
-            m_RepeatPending = false;
-            m_RunCount = 0;
+            ClearRunState(m_Zone);
+
+            // Unity sends no exit event for a disabled trigger: every object's own cycle ends here.
+            m_ObjectCycles.Clear();
         }
 
         protected virtual void Update()
         {
-            if (!Checking)
+            if (EachObject)
+            {
+                UpdateObjectCycles();
+                return;
+            }
+
+            if (!m_Zone.Checking)
             {
                 return;
             }
@@ -154,68 +212,157 @@ namespace JFCartier.Whenever
             // May stop checking (e.g. the last object inside was destroyed), hence the second test.
             RefreshOccupants();
 
-            if (!Checking)
+            if (!m_Zone.Checking)
             {
                 return;
             }
 
-            if (m_ActionsExecuting)
+            UpdateCycle(m_Zone);
+        }
+
+        /// <summary>
+        /// One frame of one cycle: where it is in Conditions -> Hold Time -> Actions -> repeat/exit.
+        /// </summary>
+        private void UpdateCycle(Cycle c)
+        {
+            if (c.ActionsExecuting)
             {
                 // Execute Exit Actions on a Condition Watcher: it has no physical exit event, so the
                 // Conditions going false is the exit - including while the Action sequence is still
                 // running (e.g. paused on a Wait), which cuts the sequence short.
-                if (UseConditionFalseAsExit && afterTrigger == AfterTrigger.ExecuteExitActions && !EvaluateConditions())
+                if (UseConditionFalseAsExit && EffectiveAfterTrigger == AfterTrigger.ExecuteExitActions && !EvaluateConditions(c))
                 {
-                    TriggerExit();
+                    TriggerExit(c);
                 }
 
                 return;
             }
 
-            if (HasFired)
+            if (c.HasFired)
             {
-                if (UseConditionFalseAsExit && !EvaluateConditions())
+                if (UseConditionFalseAsExit && !EvaluateConditions(c))
                 {
-                    RunExitActionsAndReset();
+                    RunExitActionsAndReset(c);
                 }
-                else if (m_RepeatPending)
+                else if (c.RepeatPending)
                 {
-                    TryRepeat();
+                    TryRepeat(c);
                 }
 
                 return;
             }
 
-            if (m_RepeatPending)
+            if (c.RepeatPending)
             {
-                TryRepeat();
+                TryRepeat(c);
                 return;
             }
 
-            bool conditionsMet = EvaluateConditions();
-            UpdateHintMaterial(conditionsMet);
+            bool conditionsMet = EvaluateConditions(c);
+            UpdateHintMaterial(c, conditionsMet);
 
             if (conditionsMet)
             {
-                m_HoldTimer += Time.deltaTime;
+                c.HoldTimer += Time.deltaTime;
 
-                if (m_HoldTimer >= holdTime)
+                if (c.HoldTimer >= holdTime)
                 {
-                    m_SequenceCoroutine = StartCoroutine(RunActionsCoroutine());
+                    c.Sequence = StartCoroutine(RunActionsCoroutine(c));
                 }
             }
             else
             {
-                m_HoldTimer = 0f;
+                c.HoldTimer = 0f;
             }
         }
+
+        // ---- Each Object mode -------------------------------------------------------------------------
+
+        /// <summary>
+        /// Each Object mode: something entered the zone. Gives it a cycle of its own, which starts checking
+        /// straight away. Does nothing if that object already has one.
+        /// </summary>
+        protected void ObjectEntered(GameObject go)
+        {
+            if (go == null || FindObjectCycle(go) != null) return;
+
+            m_ObjectCycles.Add(new Cycle { Target = go, Checking = true });
+        }
+
+        /// <summary>
+        /// Each Object mode: something left the zone. Ends its cycle the way leaving ends the zone's in Zone
+        /// mode - Exit Actions run if its Actions had fired (Execute Exit Actions), a run still going
+        /// otherwise carries on to its end.
+        /// </summary>
+        protected void ObjectExited(GameObject go)
+        {
+            Cycle c = FindObjectCycle(go);
+
+            if (c != null)
+            {
+                EndObjectCycle(c);
+            }
+        }
+
+        private Cycle FindObjectCycle(GameObject go)
+        {
+            for (int i = 0; i < m_ObjectCycles.Count; i++)
+            {
+                if (ReferenceEquals(m_ObjectCycles[i].Target, go)) return m_ObjectCycles[i];
+            }
+
+            return null;
+        }
+
+        private void EndObjectCycle(Cycle c)
+        {
+            m_ObjectCycles.Remove(c);
+
+            if (EffectiveAfterTrigger == AfterTrigger.ExecuteExitActions && (c.HasFired || c.ActionsExecuting))
+            {
+                TriggerExit(c);
+            }
+            else
+            {
+                StopCycle(c);
+            }
+        }
+
+        private void UpdateObjectCycles()
+        {
+            // Unity sends no exit event for an object that is destroyed or deactivated while inside, so
+            // those cycles end here, as if the object had walked out.
+            for (int i = m_ObjectCycles.Count - 1; i >= 0; i--)
+            {
+                if (i >= m_ObjectCycles.Count) continue;
+
+                Cycle c = m_ObjectCycles[i];
+                if (c.Target == null || !c.Target.activeInHierarchy)
+                {
+                    EndObjectCycle(c);
+                }
+            }
+
+            // Re-reads Count each time: an Action may disable this component, which empties the list.
+            for (int i = 0; i < m_ObjectCycles.Count; i++)
+            {
+                Cycle c = m_ObjectCycles[i];
+
+                if (c.Checking)
+                {
+                    UpdateCycle(c);
+                }
+            }
+        }
+
+        // ---- Checking / exit ---------------------------------------------------------------------------
 
         /// <summary>
         /// Starts (or resumes) evaluating the condition list every frame.
         /// </summary>
         protected void BeginChecking()
         {
-            Checking = true;
+            m_Zone.Checking = true;
         }
 
         /// <summary>
@@ -225,11 +372,16 @@ namespace JFCartier.Whenever
         /// </summary>
         protected void StopChecking()
         {
-            Checking = false;
-            m_HoldTimer = 0f;
-            m_RepeatPending = false;
-            m_RunCount = 0;
-            RevertHintMaterial();
+            StopCycle(m_Zone);
+        }
+
+        private void StopCycle(Cycle c)
+        {
+            c.Checking = false;
+            c.HoldTimer = 0f;
+            c.RepeatPending = false;
+            c.RunCount = 0;
+            RevertHintMaterial(c);
         }
 
         /// <summary>
@@ -239,21 +391,26 @@ namespace JFCartier.Whenever
         /// </summary>
         protected void TriggerExit()
         {
-            if (afterTrigger != AfterTrigger.ExecuteExitActions)
+            TriggerExit(m_Zone);
+        }
+
+        private void TriggerExit(Cycle c)
+        {
+            if (EffectiveAfterTrigger != AfterTrigger.ExecuteExitActions)
             {
                 return;
             }
 
-            if (m_ActionsExecuting)
+            if (c.ActionsExecuting)
             {
-                StopSequence();
-                m_ActionsExecuting = false;
-                HasFired = true;
+                StopSequence(c);
+                c.ActionsExecuting = false;
+                c.HasFired = true;
             }
 
-            if (HasFired)
+            if (c.HasFired)
             {
-                RunExitActionsAndReset();
+                RunExitActionsAndReset(c);
             }
         }
 
@@ -264,8 +421,16 @@ namespace JFCartier.Whenever
         /// </summary>
         protected virtual void OnFiredAndReset() { }
 
+        // ---- Conditions --------------------------------------------------------------------------------
+
         protected bool EvaluateConditions()
         {
+            return EvaluateConditions(m_Zone);
+        }
+
+        private bool EvaluateConditions(Cycle c)
+        {
+            GameObject target = TargetOf(c);
             bool result = true;
 
             for (int i = 0; i < conditions.Count; i++)
@@ -274,7 +439,7 @@ namespace JFCartier.Whenever
                 if (!condition) continue;
 
                 bool met = condition.RequiresCollisionObjectData
-                    ? condition.Evaluate(collidingObject)
+                    ? condition.Evaluate(target)
                     : condition.Evaluate();
 
                 if (condition.Invert)
@@ -299,40 +464,70 @@ namespace JFCartier.Whenever
             return result;
         }
 
-        private void UpdateHintMaterial(bool conditionsMet)
+        /// <summary>
+        /// The object a cycle is about: whatever the zone currently follows in Zone mode, the cycle's own
+        /// object in Each Object mode.
+        /// </summary>
+        private GameObject TargetOf(Cycle c)
+        {
+            return ReferenceEquals(c, m_Zone) ? collidingObject : c.Target;
+        }
+
+        // ---- Hint Material -----------------------------------------------------------------------------
+
+        private void UpdateHintMaterial(Cycle c, bool conditionsMet)
         {
             if (!showHintMaterial) return;
 
-            Renderer renderer = conditionsMet || hintMaterial == null ? null : ResolveHintRenderer();
-            if (renderer == m_ActiveHintRenderer) return;
+            Renderer renderer = conditionsMet || hintMaterial == null ? null : ResolveHintRenderer(c);
+            if (renderer == c.HintRenderer) return;
 
-            if (m_ActiveHintRenderer != null) RendererMaterialOverride.Restore(m_ActiveHintRenderer);
+            Renderer previous = c.HintRenderer;
+            c.HintRenderer = renderer;
+
             if (renderer != null) RendererMaterialOverride.Apply(renderer, hintMaterial);
-
-            m_ActiveHintRenderer = renderer;
+            RestoreIfUnused(previous);
         }
 
-        private Renderer ResolveHintRenderer()
+        private Renderer ResolveHintRenderer(Cycle c)
         {
-            return hintTargetMode == TargetMode.EnteringObjects
-                ? (collidingObject != null ? collidingObject.GetComponent<Renderer>() : null)
-                : hintRenderer;
+            if (hintTargetMode != TargetMode.EnteringObjects) return hintRenderer;
+
+            GameObject target = TargetOf(c);
+            return target != null ? target.GetComponent<Renderer>() : null;
         }
 
-        private void RevertHintMaterial()
+        private void RevertHintMaterial(Cycle c)
         {
-            if (m_ActiveHintRenderer == null) return;
-
-            RendererMaterialOverride.Restore(m_ActiveHintRenderer);
-            m_ActiveHintRenderer = null;
+            Renderer previous = c.HintRenderer;
+            c.HintRenderer = null;
+            RestoreIfUnused(previous);
         }
 
-        private void StopSequence()
+        // In Each Object mode several cycles can wear the Hint Material on the same Renderer (a Specific
+        // Object target): it only comes off once none of them needs it any more.
+        private void RestoreIfUnused(Renderer renderer)
         {
-            if (m_SequenceCoroutine == null) return;
+            if (renderer == null) return;
 
-            StopCoroutine(m_SequenceCoroutine);
-            m_SequenceCoroutine = null;
+            if (ReferenceEquals(m_Zone.HintRenderer, renderer)) return;
+
+            for (int i = 0; i < m_ObjectCycles.Count; i++)
+            {
+                if (ReferenceEquals(m_ObjectCycles[i].HintRenderer, renderer)) return;
+            }
+
+            RendererMaterialOverride.Restore(renderer);
+        }
+
+        // ---- Running the Actions -----------------------------------------------------------------------
+
+        private void StopSequence(Cycle c)
+        {
+            if (c.Sequence == null) return;
+
+            StopCoroutine(c.Sequence);
+            c.Sequence = null;
         }
 
         /// <summary>
@@ -340,12 +535,13 @@ namespace JFCartier.Whenever
         /// (they don't wait for each other to finish), except at a Wait, which pauses the rest of the list.
         /// A list without any Wait therefore runs entirely within a single call, same frame, as it always did.
         /// </summary>
+        /// <param name="c">The cycle the Actions run for; its object is what Entering Objects Actions act on.</param>
         /// <param name="list">The Actions or Exit Actions to run.</param>
         /// <param name="waitForAllToFinish">
         /// If true, ends only once the longest-running Action started has finished. Needed before Set
         /// Inactive/Destroy, which would otherwise cut an Action off mid-animation.
         /// </param>
-        private IEnumerator RunActionList(List<ActionBase> list, bool waitForAllToFinish)
+        private IEnumerator RunActionList(Cycle c, List<ActionBase> list, bool waitForAllToFinish)
         {
             // When the longest-running Action started so far will be done (absolute scaled time).
             float finishAt = Time.time;
@@ -369,7 +565,7 @@ namespace JFCartier.Whenever
 
                 if (action.RequiresCollisionObjectData)
                 {
-                    action.Execute(collidingObject);
+                    action.Execute(TargetOf(c));
                 }
                 else
                 {
@@ -391,30 +587,32 @@ namespace JFCartier.Whenever
             }
         }
 
-        private IEnumerator RunActionsCoroutine()
+        private IEnumerator RunActionsCoroutine(Cycle c)
         {
-            m_ActionsExecuting = true;
+            c.ActionsExecuting = true;
 
             if (debugLogging)
             {
                 Debug.Log(gameObject.name + " (Whenever) fired.", this);
             }
 
-            bool waitForAllToFinish = afterTrigger == AfterTrigger.SetInactive ||
-                                      afterTrigger == AfterTrigger.Destroy ||
-                                      afterTrigger == AfterTrigger.DestroyParent ||
-                                      IsFinalRunWithFinale;
+            AfterTrigger mode = EffectiveAfterTrigger;
+
+            bool waitForAllToFinish = mode == AfterTrigger.SetInactive ||
+                                      mode == AfterTrigger.Destroy ||
+                                      mode == AfterTrigger.DestroyParent ||
+                                      IsFinalRunWithFinale(c);
 
             // Driven by hand rather than with "yield return RunActionList(...)": that way a list with no
             // Wait still completes inside the very call that started this coroutine, instead of taking a
             // frame, exactly like the single loop that used to live here.
-            IEnumerator sequence = RunActionList(actions, waitForAllToFinish);
+            IEnumerator sequence = RunActionList(c, actions, waitForAllToFinish);
             while (sequence.MoveNext())
             {
                 yield return sequence.Current;
             }
 
-            switch (afterTrigger)
+            switch (mode)
             {
                 case AfterTrigger.SetInactive:
                     gameObject.SetActive(false);
@@ -429,29 +627,34 @@ namespace JFCartier.Whenever
                     break;
 
                 case AfterTrigger.DoNothing:
-                    m_ActionsExecuting = false;
+                    c.ActionsExecuting = false;
 
                     // With Repeat on, this stays armed (still Checking) for the next run instead of resetting.
-                    if (!ScheduleRepeat())
+                    if (!ScheduleRepeat(c))
                     {
-                        ResetAfterFiring();
+                        ResetAfterFiring(c);
                     }
 
                     break;
 
                 case AfterTrigger.ExecuteExitActions:
-                    m_ActionsExecuting = false;
-                    HasFired = true;
-                    ScheduleRepeat();
+                    c.ActionsExecuting = false;
+                    c.HasFired = true;
+                    ScheduleRepeat(c);
                     break;
             }
         }
 
-        private void RunExitActionsAndReset()
+        private void RunExitActionsAndReset(Cycle c)
         {
-            for (int i = 0; i < actions.Count; i++)
+            // Actions are shared by every object's cycle: cancelling them would also cut off what another
+            // object's run is still doing, so in Each Object mode that only happens for the last one.
+            if (!AnotherCycleIsRunning(c))
             {
-                if (actions[i]) actions[i].CancelExecution();
+                for (int i = 0; i < actions.Count; i++)
+                {
+                    if (actions[i]) actions[i].CancelExecution();
+                }
             }
 
             if (debugLogging)
@@ -461,17 +664,31 @@ namespace JFCartier.Whenever
 
             // Exit Actions can contain a Wait too. A list without one still runs completely inside this
             // call; with one, the rest of it carries on after the reset below.
-            StartCoroutine(RunActionList(exitActions, false));
+            StartCoroutine(RunActionList(c, exitActions, false));
 
-            ResetAfterFiring();
+            ResetAfterFiring(c);
         }
+
+        private bool AnotherCycleIsRunning(Cycle c)
+        {
+            for (int i = 0; i < m_ObjectCycles.Count; i++)
+            {
+                Cycle other = m_ObjectCycles[i];
+
+                if (!ReferenceEquals(other, c) && (other.HasFired || other.ActionsExecuting)) return true;
+            }
+
+            return false;
+        }
+
+        // ---- Repeat ------------------------------------------------------------------------------------
 
         /// <summary>
         /// Repeat only makes sense when this GameObject survives its own firing: Set Inactive/Destroy remove
         /// it after the first run.
         /// </summary>
         private bool RepeatApplies =>
-            repeat && (afterTrigger == AfterTrigger.DoNothing || afterTrigger == AfterTrigger.ExecuteExitActions);
+            repeat && (EffectiveAfterTrigger == AfterTrigger.DoNothing || EffectiveAfterTrigger == AfterTrigger.ExecuteExitActions);
 
         /// <summary>
         /// Called each time a run of the Actions has just finished. If another run is due, starts waiting for
@@ -479,28 +696,28 @@ namespace JFCartier.Whenever
         /// the zone was left while the run was still going - in which case the caller carries on exactly as
         /// it would without Repeat.
         /// </summary>
-        private bool ScheduleRepeat()
+        private bool ScheduleRepeat(Cycle c)
         {
-            m_RunCount++;
+            c.RunCount++;
 
             // Checking is false when the zone was left mid-run: there's nothing left to repeat for.
-            if (!RepeatApplies || !Checking) return false;
+            if (!RepeatApplies || !c.Checking) return false;
 
-            // m_RunCount counts the first run too, so Max Repeats extra runs means m_RunCount up to Max + 1.
-            if (maxRepeats > 0 && m_RunCount > maxRepeats)
+            // RunCount counts the first run too, so Max Repeats extra runs means RunCount up to Max + 1.
+            if (maxRepeats > 0 && c.RunCount > maxRepeats)
             {
                 // That was the last run of the series.
-                if (afterTrigger == AfterTrigger.ExecuteExitActions && exitActionsWhenRepeatsFinish)
+                if (EffectiveAfterTrigger == AfterTrigger.ExecuteExitActions && exitActionsWhenRepeatsFinish)
                 {
-                    FinishRepeatsWithExitActions();
+                    FinishRepeatsWithExitActions(c);
                 }
 
                 return false;
             }
 
             ResetElements();
-            m_RepeatAt = Time.time + Mathf.Max(repeatInterval, MinRepeatInterval);
-            m_RepeatPending = true;
+            c.RepeatAt = Time.time + Mathf.Max(repeatInterval, MinRepeatInterval);
+            c.RepeatPending = true;
             return true;
         }
 
@@ -509,47 +726,47 @@ namespace JFCartier.Whenever
         /// on until they finish first - otherwise the Exit Actions would cut off whatever is still running,
         /// since running them cancels the Actions.
         /// </summary>
-        private bool IsFinalRunWithFinale =>
+        private bool IsFinalRunWithFinale(Cycle c) =>
             RepeatApplies
             && exitActionsWhenRepeatsFinish
-            && afterTrigger == AfterTrigger.ExecuteExitActions
+            && EffectiveAfterTrigger == AfterTrigger.ExecuteExitActions
             && maxRepeats > 0
-            && m_RunCount >= maxRepeats;
+            && c.RunCount >= maxRepeats;
 
         /// <summary>
         /// Runs the Exit Actions and resets, as if the object had just left, because the series of repeats
         /// is over. The flag lets ConditionWatcher tell this apart from a normal exit.
         /// </summary>
-        private void FinishRepeatsWithExitActions()
+        private void FinishRepeatsWithExitActions(Cycle c)
         {
-            m_FinishingRepeats = true;
-            RunExitActionsAndReset();
-            m_FinishingRepeats = false;
+            c.FinishingRepeats = true;
+            RunExitActionsAndReset(c);
+            c.FinishingRepeats = false;
         }
 
         /// <summary>
         /// While a repeat is pending: once it's due and the Conditions are true, runs the Actions again.
         /// Hold Time only applies to the first run, so a repeat starts straight away.
         /// </summary>
-        private void TryRepeat()
+        private void TryRepeat(Cycle c)
         {
-            if (Time.time < m_RepeatAt) return;
+            if (Time.time < c.RepeatAt) return;
 
-            if (!EvaluateConditions())
+            if (!EvaluateConditions(c))
             {
                 // A Condition Watcher has no zone, so its Conditions going false is what ends a repeating
                 // cycle - the same role leaving plays for a Collider Event, which instead just waits here
                 // for them to be true again while the object is still inside.
-                if (UseConditionFalseAsExit && !HasFired)
+                if (UseConditionFalseAsExit && !c.HasFired)
                 {
-                    ResetAfterFiring();
+                    ResetAfterFiring(c);
                 }
 
                 return;
             }
 
-            m_RepeatPending = false;
-            m_SequenceCoroutine = StartCoroutine(RunActionsCoroutine());
+            c.RepeatPending = false;
+            c.Sequence = StartCoroutine(RunActionsCoroutine(c));
         }
 
         private void ResetElements()
@@ -565,16 +782,32 @@ namespace JFCartier.Whenever
             }
         }
 
-        private void ResetAfterFiring()
+        private void ClearRunState(Cycle c)
         {
-            HasFired = false;
-            m_HoldTimer = 0f;
-            m_RepeatPending = false;
-            m_RunCount = 0;
+            c.ActionsExecuting = false;
+            c.Sequence = null;
+            c.RepeatPending = false;
+            c.RunCount = 0;
+        }
+
+        private void ResetAfterFiring(Cycle c)
+        {
+            c.HasFired = false;
+            c.HoldTimer = 0f;
+            c.RepeatPending = false;
+            c.RunCount = 0;
 
             ResetElements();
 
-            OnFiredAndReset();
+            if (ReferenceEquals(c, m_Zone))
+            {
+                OnFiredAndReset();
+            }
+            else
+            {
+                // Each Object: this object has to leave and come back before it can fire again.
+                StopCycle(c);
+            }
         }
     }
 }

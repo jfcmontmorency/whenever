@@ -31,6 +31,9 @@ namespace JFCartier.Whenever
             m_Collider = GetComponent<Collider2D>();
         }
 
+        // Only Collider Event and Collider Event 2D can give each object its own run (Trigger For).
+        protected override bool SupportsEachObject => true;
+
         protected override void OnDisable()
         {
             base.OnDisable();
@@ -67,6 +70,12 @@ namespace JFCartier.Whenever
         {
             if (!PassesTagFilter(other)) return;
 
+            if (EachObject)
+            {
+                ObjectEntered(other.gameObject);
+                return;
+            }
+
             m_Occupants.Enter(other.gameObject);
             collidingObject = other.gameObject;
             BeginChecking();
@@ -74,6 +83,12 @@ namespace JFCartier.Whenever
 
         private void OnTriggerExit2D(Collider2D other)
         {
+            if (EachObject)
+            {
+                ObjectExited(other.gameObject);
+                return;
+            }
+
             if (!m_Occupants.Contains(other.gameObject)) return;
 
             m_Occupants.Exit(other.gameObject);

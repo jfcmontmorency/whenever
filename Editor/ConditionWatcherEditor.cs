@@ -58,7 +58,7 @@ namespace JFCartier.Whenever.Editor
             serializedObject.Update();
 
             ColliderEventEditorShared.DrawDebugLogging(m_DebugLogging);
-            ColliderEventEditorShared.DrawCommonFields(m_HoldTime, m_AfterTrigger, m_Repeat, m_RepeatInterval, m_MaxRepeats, m_ExitActionsWhenRepeatsFinish);
+            ColliderEventEditorShared.DrawCommonFields(null, m_HoldTime, m_AfterTrigger, m_Repeat, m_RepeatInterval, m_MaxRepeats, m_ExitActionsWhenRepeatsFinish);
             ColliderEventEditorShared.DrawHintMaterial(serializedObject, m_ShowHintMaterial, m_HintTargetMode, m_HintRenderer, m_HintMaterial);
             ColliderEventEditorShared.DrawMissingCollisionDataWarning(m_Conditions, m_Actions, m_ExitActions);
             ColliderEventEditorShared.DrawLists(m_ConditionsList, m_ActionsList, m_ExitActionsList, m_AfterTrigger);
