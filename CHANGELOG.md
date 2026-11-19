@@ -3,6 +3,21 @@
 All notable changes to this package are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.1]
+
+### Fixed
+
+- A `Collider Event` / `Collider Event 2D` with several objects inside only followed the last one to enter.
+  When that object left, the whole zone stopped - a lava zone with Repeat stopped hurting everyone else,
+  and Execute Exit Actions ran while others were still inside - and objects entering in the same frame as
+  another were forgotten. The zone now tracks **every** object inside and stays occupied until the
+  **last** one has left. The object handed to Entering Objects Actions is the most recent one still inside
+  (and the last one to leave, for Exit Actions).
+- An object destroyed or deactivated while inside a zone (Unity sends no exit event for that) is now
+  dropped from it. If it was the last one, the zone empties as if it had left, instead of still firing
+  for something that is gone.
+- With a single object, nothing changes.
+
 ## [0.7.0]
 
 ### Added

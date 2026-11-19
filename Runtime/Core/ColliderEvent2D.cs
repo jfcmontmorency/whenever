@@ -21,14 +21,23 @@ namespace JFCartier.Whenever
 
         private Collider2D m_Collider;
 
-        // Unity sends no OnTriggerExit2D when the overlapping object is destroyed or deactivated, so Repeat
-        // checks for that itself instead of repeating for something that's gone.
-        protected override bool IsRepeatSourceGone => collidingObject == null || !collidingObject.activeInHierarchy;
+        // Every object currently inside the zone, in the order they entered. The zone stays occupied until
+        // the last one has left (see ZoneOccupants).
+        private readonly ZoneOccupants m_Occupants = new ZoneOccupants();
 
         protected override void Start()
         {
             base.Start();
             m_Collider = GetComponent<Collider2D>();
+        }
+
+        protected override void OnDisable()
+        {
+            base.OnDisable();
+
+            // Unity sends no OnTriggerExit2D for a disabled trigger - forget who was inside rather than
+            // keep entries that may be stale by the time it is enabled again.
+            m_Occupants.Clear();
         }
 
         protected override void OnFiredAndReset()
@@ -37,18 +46,53 @@ namespace JFCartier.Whenever
             StopChecking();
         }
 
+        // Objects destroyed or deactivated while inside send no OnTriggerExit2D, so they're dropped here.
+        // The object handed to Entering Objects Actions is always the latest one still inside; if nobody
+        // is left, the zone empties just as if the last one had walked out.
+        protected override void RefreshOccupants()
+        {
+            GameObject latest = m_Occupants.Latest;
+
+            if (latest != null)
+            {
+                collidingObject = latest;
+            }
+            else
+            {
+                ZoneEmptied();
+            }
+        }
+
         private void OnTriggerEnter2D(Collider2D other)
         {
             if (!PassesTagFilter(other)) return;
 
+            m_Occupants.Enter(other.gameObject);
             collidingObject = other.gameObject;
             BeginChecking();
         }
 
         private void OnTriggerExit2D(Collider2D other)
         {
-            if (collidingObject != other.gameObject) return;
+            if (!m_Occupants.Contains(other.gameObject)) return;
 
+            m_Occupants.Exit(other.gameObject);
+
+            if (!m_Occupants.IsEmpty)
+            {
+                // Someone is still inside, so the zone stays occupied; only the object handed to Entering
+                // Objects Actions changes, to the latest one left.
+                collidingObject = m_Occupants.Latest;
+                return;
+            }
+
+            // The last one has left: any Exit Actions that target the entering object act on this one.
+            collidingObject = other.gameObject;
+            ZoneEmptied();
+        }
+
+        private void ZoneEmptied()
+        {
             if (afterTrigger == AfterTrigger.ExecuteExitActions && (HasFired || IsExecutingActions))
             {
                 TriggerExit();

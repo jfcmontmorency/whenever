@@ -7,7 +7,9 @@ condition watchers, without writing code.
 
 - **Collider Event** - add alongside any native Collider (mark it "Is Trigger"). Waits for something to
   enter the zone, then checks the Conditions. Optionally restrict which Tags can trigger it - leave every
-  box unchecked to let anything with a Collider trigger it.
+  box unchecked to let anything with a Collider trigger it. With several objects inside at once, the zone
+  stays occupied until the **last** one has left (that's when Repeat stops and Exit Actions run), and the
+  Actions set to **Entering Objects** act on the most recent one still inside.
 - **Collider Event 2D** - the same thing for 2D games: add alongside any Collider2D (mark it "Is Trigger").
   See "2D games" below.
 - **Condition Watcher** - no Collider needed. Checks the Conditions continuously from the moment the

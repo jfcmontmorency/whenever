@@ -109,12 +109,12 @@ namespace JFCartier.Whenever
         protected virtual bool UseConditionFalseAsExit => false;
 
         /// <summary>
-        /// True when whatever triggered this zone no longer counts as inside it, without a physical exit
-        /// having been reported (e.g. it was destroyed while overlapping - Unity doesn't send an exit
-        /// event for that). Repeat checks it to stop repeating for something that's gone. ColliderEvent
-        /// overrides it; ConditionWatcher has no zone, so it never applies there.
+        /// Called at the start of every Update() while checking. A zone overrides it to bring collidingObject
+        /// up to date with who is actually inside (and to react if nobody is left), because Unity sends no
+        /// exit event for an object that is destroyed or deactivated while overlapping a trigger.
+        /// ConditionWatcher has no zone, so it leaves this empty.
         /// </summary>
-        protected virtual bool IsRepeatSourceGone => false;
+        protected virtual void RefreshOccupants() { }
 
         protected virtual void Start()
         {
@@ -146,6 +146,14 @@ namespace JFCartier.Whenever
 
         protected virtual void Update()
         {
+            if (!Checking)
+            {
+                return;
+            }
+
+            // May stop checking (e.g. the last object inside was destroyed), hence the second test.
+            RefreshOccupants();
+
             if (!Checking)
             {
                 return;
@@ -525,22 +533,6 @@ namespace JFCartier.Whenever
         /// </summary>
         private void TryRepeat()
         {
-            if (IsRepeatSourceGone)
-            {
-                // Whatever triggered this was destroyed or deactivated and no exit was reported: treat it
-                // as having left.
-                if (HasFired)
-                {
-                    RunExitActionsAndReset();
-                }
-                else
-                {
-                    ResetAfterFiring();
-                }
-
-                return;
-            }
-
             if (Time.time < m_RepeatAt) return;
 
             if (!EvaluateConditions())
